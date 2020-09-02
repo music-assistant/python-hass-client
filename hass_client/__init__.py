@@ -27,7 +27,6 @@ class HomeAssistant:
             Initialize the connection to HomeAssistant.
                 :param url: full url to the HomeAssistant instance.
                 :param token: a long lived token.
-            Note: Leave url and token empty for auto detection on supervisor addon's.
         """
         self._loop = asyncio.get_event_loop()
         self._states = {}
@@ -48,8 +47,17 @@ class HomeAssistant:
         self._initial_state_received = False
         self._connected_callback = None
         self._event_listeners = []
+        self._ws_task = None
 
-    async def connect(self):
+    def connect(self):
+        """Start the connection."""
+        self._loop.create_task(self.async_connect())
+
+    def close(self):
+        """Close the connection."""
+        self._loop.create_task(self.async_close())
+
+    async def async_connect(self):
         """Start the connection."""
         if not self._loop.is_running:
             raise RuntimeError("A running eventloop is required!")
@@ -58,7 +66,15 @@ class HomeAssistant:
         self._http_session = aiohttp.ClientSession(
             loop=self._loop, connector=aiohttp.TCPConnector()
         )
-        self._loop.create_task(self.__async_hass_websocket())
+        self._ws_task = self._loop.create_task(self.__async_hass_websocket())
+
+    async def async_close(self):
+        """Close/stop the connection."""
+        if self._ws_task:
+            self._ws_task.cancel()
+        if self._http_session:
+            await self._http_session.close()
+        LOGGER.info("Disconnected from Home Assistant")
 
     def register_event_callback(
         self,

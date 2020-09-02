@@ -33,7 +33,10 @@ if __name__ == "__main__":
     hass.register_event_callback(hass_event, )
 
     async def run():
-        await hass.connect()
+        await hass.async_connect()
+        await asyncio.sleep(10)
+        await hass.async_close()
+        loop.stop()
 
     try:
         loop.create_task(run())

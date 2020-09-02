@@ -5,12 +5,10 @@ from setuptools import setup, glob, find_packages
 
 PROJECT_DIR = Path(__file__).parent.resolve()
 README_FILE = PROJECT_DIR / "README.md"
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 
 with open("requirements.txt") as f:
     INSTALL_REQUIRES = f.read().splitlines()
-if os.name != "nt":
-    INSTALL_REQUIRES.append("uvloop")
 
 PACKAGE_FILES = []
 for (path, directories, filenames) in os.walk('hass_client/'):
@@ -20,8 +18,8 @@ for (path, directories, filenames) in os.walk('hass_client/'):
 setup(
     name="hass_client",
     version=VERSION,
-    url="https://github.com/marcelveldt/hass-client",
-    download_url="https://github.com/marcelveldt/hass-client",
+    url="https://github.com/marcelveldt/python-hass-client",
+    download_url="https://github.com/marcelveldt/python-hass-client",
     author="Marcel van der Veldt",
     author_email="m.vanderveldt@outlook.com",
     description="Basic client for connecting to Home Assistant over websockets and REST.",
