@@ -193,10 +193,15 @@ class HomeAssistant:
             msg["service_data"] = service_data
         return await self.__async_send_ws(msg)
 
-    async def __async_set_state(
+    async def async_set_state(
         self, entity_id: str, new_state: str, state_attributes: dict = None
     ):
-        """Set state to hass entity."""
+        """
+            Set state on a homeassistant entity.
+                :param entity_id: Entity id to set state for.
+                :param new_state: The new state.
+                :param state_attributes: Optional dict with parameters (e.g. { name: 'Cool entity' }).
+        """
         if state_attributes is None:
             state_attributes = {}
         data = {
