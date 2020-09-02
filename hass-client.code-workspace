@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "Python: Huidige bestand",
+				"type": "python",
+				"request": "launch",
+				"program": "${file}",
+				"console": "integratedTerminal",
+				"args": ["https://hass.vanderveldt.me", "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJjMmE5YTMwNmZkZjM0M2IzYWEzNWY2YWYxM2M0ZTNlNyIsImlhdCI6MTU5OTA1MDc0OSwiZXhwIjoxOTE0NDEwNzQ5fQ.ScKFLx3j0hkNVotUlFYVS33-f6evv3V1fNim_Hl5JmM"]
+			}
+		]
+	}
+}
