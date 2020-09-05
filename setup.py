@@ -5,7 +5,7 @@ from setuptools import setup, glob, find_packages
 
 PROJECT_DIR = Path(__file__).parent.resolve()
 README_FILE = PROJECT_DIR / "README.md"
-VERSION = "0.0.4"
+VERSION = "0.0.5"
 
 with open("requirements.txt") as f:
     INSTALL_REQUIRES = f.read().splitlines()

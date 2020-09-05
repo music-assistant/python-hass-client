@@ -42,6 +42,7 @@ class HomeAssistant:
         if not url and not token and IS_SUPERVISOR:
             self._host = "hassio/homeassistant"
             self._use_ssl = False
+            self._token = None
         elif url.startswith("https://"):
             self._use_ssl = True
             self._host = url.replace("https://", "")
@@ -341,6 +342,9 @@ class HomeAssistant:
 
     async def __async_get_data(self, endpoint: str):
         """Get data from hass rest api."""
+        if not self._http_session:
+            LOGGER.warning("Not connected")
+            return
         url = f"http://{self._host}/api/{endpoint}"
         if self._use_ssl:
             url = f"https://{self._host}/api/{endpoint}"
@@ -353,6 +357,9 @@ class HomeAssistant:
 
     async def __async_post_data(self, endpoint: str, data: dict):
         """Post data to hass rest api."""
+        if not self._http_session:
+            LOGGER.warning("Not connected")
+            return
         url = f"http://{self._host}/api/{endpoint}"
         if self._use_ssl:
             url = f"https://{self._host}/api/{endpoint}"
