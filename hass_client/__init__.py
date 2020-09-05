@@ -63,8 +63,6 @@ class HomeAssistant:
         """Connect to HomeAssistant."""
         if not self._loop:
             self._loop = asyncio.get_running_loop()
-        if not self._token or not self._host:
-            raise RuntimeError("A valid url and token is required")
         self._http_session = aiohttp.ClientSession(
             loop=self._loop, connector=aiohttp.TCPConnector()
         )
