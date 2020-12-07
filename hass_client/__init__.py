@@ -1,15 +1,16 @@
 """
-    Hass Client is a simple wrapper for the websockets and rest Api's
-    provided by Home Assistant that allows for rapid development of apps
-    connected to Hopme Assistant.
+Home Assistant Client for python.
+
+Simple wrapper for the websockets and rest Api's
+provided by Home Assistant that allows for rapid development of apps
+connected to Hopme Assistant.
 """
 
 import asyncio
 import functools
 import logging
 import os
-from enum import Enum
-from typing import Any, Awaitable, Callable, List, Optional, Tuple, Union
+from typing import Any, Awaitable, Callable, List, Union
 
 import aiohttp
 
@@ -27,6 +28,7 @@ class HomeAssistant:
     def __init__(self, url: str = None, token: str = None, loop=None):
         """
         Initialize the connection to HomeAssistant.
+
             :param url: full url to the HomeAssistant instance.
             :param token: a long lived token.
         If url and token are omitted, assume supervisor install.
@@ -84,6 +86,7 @@ class HomeAssistant:
     ) -> Callable:
         """
         Add callback for events.
+
         Returns function to remove the listener.
             :param cb_func: callback function or coroutine
             :param event_filter: Optionally only listen for these events
@@ -159,6 +162,7 @@ class HomeAssistant:
     def get_state(self, entity_id: str, attribute: str = "state") -> dict:
         """
         Get state(obj) of a Home Assistant entity.
+
             :param entity_id: The entity id for which the state must be returned.
             :param attribute: The attribute to return from the state object.
         """
@@ -176,14 +180,18 @@ class HomeAssistant:
     async def async_get_state(self, entity_id: str, attribute: str = "state") -> dict:
         """
         Get state(obj) of a Home Assistant entity.
+
             :param entity_id: The entity id for which the state must be returned.
             :param attribute: The attribute to return from the state object.
         """
         return self.get_state(entity_id, attribute)  # safe to call in loop
 
-    async def async_call_service(self, domain: str, service: str, service_data: dict = None):
+    async def async_call_service(
+        self, domain: str, service: str, service_data: dict = None
+    ):
         """
         Call service on Home Assistant.
+
             :param url: Domain of the service to call (e.g. light, switch).
             :param service: The service to call  (e.g. turn_on).
             :param service_data: Optional dict with parameters (e.g. { brightness: 20 }).
@@ -195,9 +203,12 @@ class HomeAssistant:
             msg["service_data"] = service_data
         return await self.__async_send_ws(msg)
 
-    async def async_set_state(self, entity_id: str, new_state: str, state_attributes: dict = None):
+    async def async_set_state(
+        self, entity_id: str, new_state: str, state_attributes: dict = None
+    ):
         """
         Set state on a homeassistant entity.
+
             :param entity_id: Entity id to set state for.
             :param new_state: The new state.
             :param state_attributes: Optional dict with parameters (e.g. { name: 'Cool entity' }).
@@ -253,10 +264,7 @@ class HomeAssistant:
             data = msg.json()
             if data["type"] == "auth_required":
                 # send auth token
-                auth_msg = {
-                    "type": "auth",
-                    "access_token": self.__get_token(),
-                }
+                auth_msg = {"type": "auth", "access_token": self.__get_token()}
                 await conn.send_json(auth_msg)
             elif data["type"] == "auth_invalid":
                 raise Exception(data)
@@ -273,13 +281,11 @@ class HomeAssistant:
         """Subscribe to common events when the ws was (re)connected."""
         # request all current states
         await self.__async_send_ws(
-            {"type": "get_states"},
-            callback=self.__async_receive_all_states,
+            {"type": "get_states"}, callback=self.__async_receive_all_states
         )
         # subscribe to all events
         await self.__async_send_ws(
-            {"type": "subscribe_events"},
-            callback=self.__async_state_changed,
+            {"type": "subscribe_events"}, callback=self.__async_state_changed
         )
         # request all area, device and entity registry
         await self.__async_send_ws(
@@ -350,7 +356,9 @@ class HomeAssistant:
             "Authorization": f"Bearer {self.__get_token()}",
             "Content-Type": "application/json",
         }
-        async with self._http_session.get(url, headers=headers, verify_ssl=False) as response:
+        async with self._http_session.get(
+            url, headers=headers, verify_ssl=False
+        ) as response:
             return await response.json()
 
     async def __async_post_data(self, endpoint: str, data: dict):
@@ -377,7 +385,9 @@ class HomeAssistant:
                 continue
             if event == EVENT_STATE_CHANGED:
                 entity_id = event_details.get("entity_id")
-                if not (entity_filter is None or not entity_id or entity_id in entity_filter):
+                if not (
+                    entity_filter is None or not entity_id or entity_id in entity_filter
+                ):
                     continue
             # call callback
             check_target = cb_func
@@ -392,7 +402,7 @@ class HomeAssistant:
                 self._loop.run_in_executor(None, cb_func, event, event_details)
 
     def __get_token(self) -> str:
-        """"Get auth token for Home Assistant."""
+        """Get auth token for Home Assistant."""
         if IS_SUPERVISOR:
             # On supervisor installs the token is provided by a environment variable
             return os.environ["HASSIO_TOKEN"]
