@@ -1,9 +1,10 @@
 """Some simple tests/examples for the Home Assistant client."""
 
 import asyncio
-import sys
-from hass_client import HomeAssistant
 import logging
+import sys
+
+from hass_client import HomeAssistant
 
 LOGGER = logging.getLogger()
 
@@ -26,13 +27,14 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     hass = HomeAssistant(url, token)
 
-
     async def hass_event(event, event_details):
+        """Handle hass event callback."""
         LOGGER.info("received event %s --> %s\n", event, event_details)
-        
-    hass.register_event_callback(hass_event, )
+
+    hass.register_event_callback(hass_event)
 
     async def run():
+        """Run tests."""
         await hass.async_connect()
         await asyncio.sleep(10)
         await hass.async_close()

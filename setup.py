@@ -1,19 +1,24 @@
-from pathlib import Path
-import os
+"""Setup Hass client."""
 
-from setuptools import setup, glob, find_packages
+import os
+from pathlib import Path
+
+from setuptools import find_packages, setup
+
+VERSION = "0.0.7"
 
 PROJECT_DIR = Path(__file__).parent.resolve()
 README_FILE = PROJECT_DIR / "README.md"
-VERSION = "0.0.7"
+PACKAGES = find_packages(exclude=["tests", "tests.*"])
+PACKAGE_FILES = []
+for (path, directories, filenames) in os.walk("hass_client/"):
+    for filename in filenames:
+        PACKAGE_FILES.append(os.path.join("..", path, filename))
 
 with open("requirements.txt") as f:
-    INSTALL_REQUIRES = f.read().splitlines()
-
-PACKAGE_FILES = []
-for (path, directories, filenames) in os.walk('hass_client/'):
-    for filename in filenames:
-        PACKAGE_FILES.append(os.path.join('..', path, filename))
+    REQUIRES = f.read().splitlines()
+if os.name != "nt":
+    REQUIRES.append("uvloop")
 
 setup(
     name="hass_client",
@@ -25,13 +30,11 @@ setup(
     description="Basic client for connecting to Home Assistant over websockets and REST.",
     long_description=README_FILE.read_text(encoding="utf-8"),
     long_description_content_type="text/markdown",
-    packages=find_packages(exclude=["test.*", "test"]),
-    python_requires=">=3.7",
+    packages=PACKAGES,
     include_package_data=True,
-    install_requires=INSTALL_REQUIRES,
-    package_data={
-        'hass_client': PACKAGE_FILES,
-    },
+    python_requires=">=3.7",
+    install_requires=REQUIRES,
+    package_data={"hass_client": PACKAGE_FILES},
     zip_safe=False,
     classifiers=[
         "Development Status :: 4 - Beta",
