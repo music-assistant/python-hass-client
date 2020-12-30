@@ -5,7 +5,7 @@ from pathlib import Path
 
 from setuptools import find_packages, setup
 
-VERSION = "0.0.8"
+VERSION = "0.0.9"
 
 PROJECT_DIR = Path(__file__).parent.resolve()
 README_FILE = PROJECT_DIR / "README.md"
@@ -17,8 +17,6 @@ for (path, directories, filenames) in os.walk("hass_client/"):
 
 with open("requirements.txt") as f:
     REQUIRES = f.read().splitlines()
-if os.name != "nt":
-    REQUIRES.append("uvloop")
 
 setup(
     name="hass_client",
