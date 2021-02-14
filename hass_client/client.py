@@ -12,7 +12,7 @@ import os
 import pprint
 from types import TracebackType
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
-
+import ujson
 from aiohttp import (
     ClientSession,
     ClientWebSocketResponse,
@@ -34,7 +34,6 @@ LOGGER = logging.getLogger(__package__)
 EVENT_STATE_CHANGED = "state_changed"
 
 IS_SUPERVISOR = os.environ.get("HASSIO_TOKEN") is not None
-SIZE_PARSE_JSON_EXECUTOR = 8192
 
 
 class HomeAssistantClient:
@@ -295,10 +294,7 @@ class HomeAssistantClient:
                     raise InvalidMessage(f"Received non-Text message: {msg.type}")
 
                 try:
-                    if len(msg.data) > SIZE_PARSE_JSON_EXECUTOR:
-                        data: dict = await self._loop.run_in_executor(None, msg.json)
-                    else:
-                        data = msg.json()
+                    data = msg.json(loads=ujson.loads)
                 except ValueError as err:
                     raise InvalidMessage("Received invalid JSON.") from err
 
@@ -369,7 +365,7 @@ class HomeAssistantClient:
         assert self._client
         assert "id" in message
 
-        await self._client.send_json(message)
+        await self._client.send_json(message, dumps=ujson.dumps)
 
     async def __aenter__(self) -> "HomeAssistantClient":
         """Connect to the websocket."""
