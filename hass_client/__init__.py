@@ -1,2 +1,2 @@
 """Provide a package for hass-client."""
-from .client import HomeAssistantClient
+from .client import HomeAssistantClient  # noqa

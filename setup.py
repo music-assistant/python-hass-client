@@ -5,7 +5,7 @@ from pathlib import Path
 
 from setuptools import find_packages, setup
 
-VERSION = "0.0.9"
+VERSION = "0.1.0"
 
 PROJECT_DIR = Path(__file__).parent.resolve()
 README_FILE = PROJECT_DIR / "README.md"
@@ -30,7 +30,7 @@ setup(
     long_description_content_type="text/markdown",
     packages=PACKAGES,
     include_package_data=True,
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     install_requires=REQUIRES,
     package_data={"hass_client": PACKAGE_FILES},
     zip_safe=False,
@@ -39,8 +39,8 @@ setup(
         "Intended Audience :: Developers",
         "Natural Language :: English",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+         "Programming Language :: Python :: 3.9",
         "Topic :: Home Automation",
     ],
 )

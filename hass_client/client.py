@@ -10,7 +10,6 @@ import functools
 import logging
 import os
 import pprint
-import uuid
 from types import TracebackType
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
@@ -31,6 +30,7 @@ from .exceptions import (
     NotConnected,
 )
 
+LOGGER = logging.getLogger(__package__)
 EVENT_STATE_CHANGED = "state_changed"
 
 IS_SUPERVISOR = os.environ.get("HASSIO_TOKEN") is not None
@@ -75,15 +75,9 @@ class HomeAssistantClient:
         self._http_session = aiohttp_session or ClientSession(
             loop=self._loop, connector=TCPConnector(enable_cleanup_closed=True)
         )
-        self._logger = logging.getLogger(__package__)
         self._client: Optional[ClientWebSocketResponse] = None
         self._result_futures: Dict[str, asyncio.Future] = {}
         self._shutdown_complete_event: Optional[asyncio.Event] = None
-
-    def _repr__(self) -> str:
-        """Return the representation."""
-        prefix = "" if self.connected else "not "
-        return f"{type(self).__name__}(ws_server_url={self.ws_server_url!r}, {prefix}connected)"
 
     @property
     def connected(self) -> bool:
@@ -107,7 +101,7 @@ class HomeAssistantClient:
         Returns function to remove the listener.
             :param cb_func: callback function or coroutine
             :param event_filter: Optionally only listen for these events
-            :param event_filter: In case of state_changed event, only forward these entities
+            :param entity_filter: In case of state_changed event, only forward these entities
         """
         listener = (cb_func, event_filter, entity_filter)
         self._event_listeners.append(listener)
@@ -121,26 +115,28 @@ class HomeAssistantClient:
     def device_registry(self) -> dict:
         """Return device registry."""
         if not self._device_registry:
-            self._logger.warning("Connection is not yet ready.")
+            raise NotConnected("Please call connect first.")
         return self._device_registry
 
     @property
     def entity_registry(self) -> dict:
         """Return device registry."""
         if not self._entity_registry:
-            self._logger.warning("Connection is not yet ready.")
+            raise NotConnected("Please call connect first.")
         return self._entity_registry
 
     @property
     def area_registry(self) -> dict:
         """Return device registry."""
+        if not self._area_registry:
+            raise NotConnected("Please call connect first.")
         return self._area_registry
 
     @property
     def states(self) -> dict:
         """Return all hass states."""
-        if not self._entity_registry:
-            self._logger.warning("Connection is not yet ready.")
+        if not self._states:
+            raise NotConnected("Please call connect first.")
         return self._states
 
     @property
@@ -171,7 +167,7 @@ class HomeAssistantClient:
     def items_by_domain(self, domain: str) -> List[dict]:
         """Retrieve all items for a domain."""
         if not self._initial_state_received:
-            self._logger.warning("Connection is not yet ready.")
+            raise NotConnected("Please call connect first.")
         return [value for key, value in self._states.items() if key.startswith(domain)]
 
     def get_state(self, entity_id: str, attribute: str = "state") -> dict:
@@ -182,7 +178,7 @@ class HomeAssistantClient:
             :param attribute: The attribute to return from the state object.
         """
         if not self._initial_state_received:
-            self._logger.warning("Connection is not yet ready.")
+            LOGGER.warning("Connection is not yet ready.")
         state_obj = self._states.get(entity_id)
         if state_obj:
             if attribute == "state":
@@ -201,7 +197,7 @@ class HomeAssistantClient:
             :param service_data: Optional dict with parameters (e.g. { brightness: 20 }).
         """
         if not self.connected:
-            self._logger.warning("Connection is not yet ready.")
+            raise NotConnected("Please call connect first.")
         msg = {"type": "call_service", "domain": domain, "service": service}
         if service_data:
             msg["service_data"] = service_data
@@ -240,11 +236,10 @@ class HomeAssistantClient:
 
     async def connect(self) -> None:
         """Connect to the websocket server."""
-        self._logger.debug("Connecting to Home Assistant...")
+        LOGGER.debug("Connecting to Home Assistant...")
         try:
             self._client = await self._http_session.ws_connect(
-                self.ws_server_url,
-                heartbeat=55,
+                self.ws_server_url, heartbeat=55
             )
             version_msg = await self._client.receive_json()
             self._version = version_msg["ha_version"]
@@ -261,7 +256,7 @@ class HomeAssistantClient:
         ) as err:
             raise CannotConnect(err) from err
 
-        self._logger.info(
+        LOGGER.info(
             "Connected to Home Assistant %s (version %s)",
             self.ws_server_url.split("://")[0].split("/")[0],
             self.version,
@@ -275,7 +270,7 @@ class HomeAssistantClient:
 
     async def disconnect(self) -> None:
         """Disconnect the client."""
-        self._logger.debug("Closing client connection")
+        LOGGER.debug("Closing client connection")
 
         if not self.connected:
             return
@@ -307,14 +302,14 @@ class HomeAssistantClient:
                 except ValueError as err:
                     raise InvalidMessage("Received invalid JSON.") from err
 
-                if self._logger.isEnabledFor(logging.DEBUG):
-                    self._logger.debug("Received message:\n%s\n", pprint.pformat(msg))
+                if LOGGER.isEnabledFor(logging.DEBUG):
+                    LOGGER.debug("Received message:\n%s\n", pprint.pformat(msg))
 
                 self._handle_incoming_message(data)
 
         finally:
             # TODO: handle reconnect!
-            self._logger.debug("Listen completed. Cleaning up")
+            LOGGER.debug("Listen completed. Cleaning up")
 
             for future in self._result_futures.values():
                 future.cancel()
@@ -325,7 +320,7 @@ class HomeAssistantClient:
             if self._shutdown_complete_event:
                 self._shutdown_complete_event.set()
             else:
-                self._logger.debug("Connection lost, will reconnect in 10 seconds...")
+                LOGGER.debug("Connection lost, will reconnect in 10 seconds...")
                 self._loop.create_task(self._auto_reconnect())
 
     def _handle_incoming_message(self, msg: dict) -> None:
@@ -334,7 +329,7 @@ class HomeAssistantClient:
             future = self._result_futures.get(msg["id"])
 
             if future is None:
-                self._logger.warning(
+                LOGGER.warning(
                     "Received result for unknown message with ID: %s", msg["id"]
                 )
                 return
@@ -348,10 +343,8 @@ class HomeAssistantClient:
 
         if msg["type"] != "event":
             # Can't handle
-            self._logger.debug(
-                "Received message with unknown type '%s': %s",
-                msg["type"],
-                msg,
+            LOGGER.debug(
+                "Received message with unknown type '%s': %s", msg["type"], msg
             )
             return
 
@@ -370,15 +363,15 @@ class HomeAssistantClient:
         if not self.connected:
             raise NotConnected
 
-        if self._logger.isEnabledFor(logging.DEBUG):
-            self._logger.debug("Publishing message:\n%s\n", pprint.pformat(message))
+        if LOGGER.isEnabledFor(logging.DEBUG):
+            LOGGER.debug("Publishing message:\n%s\n", pprint.pformat(message))
 
         assert self._client
         assert "id" in message
 
         await self._client.send_json(message)
 
-    async def __aenter__(self) -> "Client":
+    async def __aenter__(self) -> "HomeAssistantClient":
         """Connect to the websocket."""
         await self.connect()
         return self
@@ -388,6 +381,11 @@ class HomeAssistantClient:
     ) -> None:
         """Disconnect from the websocket."""
         await self.disconnect()
+
+    def __repr__(self) -> str:
+        """Return the representation."""
+        prefix = "" if self.connected else "not "
+        return f"{type(self).__name__}(ws_server_url={self.ws_server_url!r}, {prefix}connected)"
 
     async def _request_full_state(self):
         """Request full state."""
