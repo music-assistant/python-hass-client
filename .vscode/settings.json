@@ -1,5 +1,6 @@
 {
     "python.linting.pylintEnabled": false,
     "python.linting.enabled": true,
-    "python.linting.flake8Enabled": true
+    "python.linting.flake8Enabled": true,
+    "python.pythonPath": "/Users/marcelvanderveldt/Workdir/marcelveldt/python-hass-client/.venv/bin/python3"
 }
