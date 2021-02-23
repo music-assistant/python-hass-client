@@ -166,7 +166,7 @@ class HomeAssistantClient:
 
     def items_by_domain(self, domain: str) -> List[dict]:
         """Retrieve all items for a domain."""
-        if not self._initial_state_received:
+        if not self.connected:
             raise NotConnected("Please call connect first.")
         return [value for key, value in self._states.items() if key.startswith(domain)]
 
@@ -177,7 +177,7 @@ class HomeAssistantClient:
             :param entity_id: The entity id for which the state must be returned.
             :param attribute: The attribute to return from the state object.
         """
-        if not self._initial_state_received:
+        if not self.connected:
             LOGGER.warning("Connection is not yet ready.")
         state_obj = self._states.get(entity_id)
         if state_obj:
