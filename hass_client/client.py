@@ -155,6 +155,11 @@ class HomeAssistantClient:
         return self.items_by_domain("media_player")
 
     @property
+    def cameras(self) -> List[dict]:
+        """Return all camera entities."""
+        return self.items_by_domain("camera")
+
+    @property
     def sensors(self) -> List[dict]:
         """Return all sensor entities."""
         return self.items_by_domain("sensor")
