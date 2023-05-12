@@ -29,4 +29,3 @@ jobs:
           pre-commit install-hooks
       - name: Lint with pre-commit
         run: pre-commit run --all-files
-

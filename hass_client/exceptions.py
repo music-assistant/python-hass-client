@@ -1,9 +1,6 @@
 """Exceptions for hass-client."""
 
 
-from typing import Optional
-
-
 class BaseHassClientError(Exception):
     """Base Hass Client exception."""
 
@@ -11,7 +8,7 @@ class BaseHassClientError(Exception):
 class TransportError(BaseHassClientError):
     """Exception raised to represent transport errors."""
 
-    def __init__(self, message: str, error: Optional[Exception] = None) -> None:
+    def __init__(self, message: str, error: Exception | None = None) -> None:
         """Initialize a transport error."""
         super().__init__(message)
         self.error = error
@@ -28,7 +25,7 @@ class CannotConnect(TransportError):
 class ConnectionFailed(TransportError):
     """Exception raised when an established connection fails."""
 
-    def __init__(self, error: Optional[Exception] = None) -> None:
+    def __init__(self, error: Exception | None = None) -> None:
         """Initialize a connection failed error."""
         if error is None:
             super().__init__("Connection failed.")

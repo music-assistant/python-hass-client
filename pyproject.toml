@@ -1,0 +1,122 @@
+[build-system]
+requires = ["setuptools~=62.3", "wheel~=0.37.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hass_client"
+version = "1.0.0"
+license     = {text = "Apache-2.0"}
+description = "Basic client for connecting to Home Assistant over websockets and REST."
+readme = "README.md"
+requires-python = ">=3.10"
+authors     = [
+    {name = "Marcel van der Veldt", email = "marcelveldt@users.noreply.github.com"}
+]
+classifiers = [
+  "Environment :: Console",
+   "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11"
+]
+dependencies = [
+  "aiohttp>=3.8.4"
+]
+
+[project.optional-dependencies]
+speedups = [
+  "faust-cchardet>=2.1.18",
+  "aiodns>=3.0.0",
+  "Brotli>=1.0.9",
+  "orjson>=3.8.9"
+]
+test = [
+  "black==23.1.0",
+  "codespell==2.2.4",
+  "mypy==1.2.0",
+  "ruff==0.0.261",
+  "pytest==7.2.2",
+  "pytest-asyncio==0.21.0",
+  "pytest-aiohttp==1.0.4",
+  "pytest-cov==4.0.0",
+  "pre-commit==3.2.2",
+  "pylint==2.17.2"
+]
+
+[tool.black]
+target-version = ['py311']
+line-length = 100
+
+[tool.codespell]
+ignore-words-list = "hass,"
+
+[tool.mypy]
+python_version = "3.11"
+check_untyped_defs = true
+#disallow_any_generics = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = false
+disallow_untyped_defs = true
+mypy_path = "hass_client/"
+no_implicit_optional = true
+show_error_codes = true
+warn_incomplete_stub = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+warn_unused_configs = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+ignore_missing_imports = true
+module = [
+  "aiorun",
+  "coloredlogs",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = [
+  "."
+]
+
+[tool.setuptools]
+platforms = ["any"]
+zip-safe  = false
+packages = ["hass_client"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+hass_client = ["py.typed"]
+
+[tool.ruff]
+fix = true
+show-fixes = true
+
+# enable later: "C90", "PTH", "TCH", "RET", "ANN"
+select = ["E", "F", "W", "I", "N", "D", "UP", "PL", "Q", "SIM", "TID", "ARG"]
+ignore = ["PLR2004", "N818"]
+extend-exclude = ["app_vars.py"]
+unfixable = ["F841"]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.flake8-annotations]
+allow-star-arg-any = true
+suppress-dummy-args = true
+
+[tool.ruff.flake8-builtins]
+builtins-ignorelist = ["id"]
+
+[tool.ruff.pydocstyle]
+# Use Google-style docstrings.
+convention = "pep257"
+
+[tool.ruff.pylint]
+
+max-branches=25
+max-returns=15
+max-args=10
+max-statements=50
+
+[tool.pylint.'MESSAGES CONTROL']
+max-line-length = 120
+disable = "R0902,"
