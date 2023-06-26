@@ -31,7 +31,7 @@ speedups = [
 test = [
   "black==23.1.0",
   "codespell==2.2.4",
-  "mypy==1.2.0",
+  "mypy==1.4.1",
   "ruff==0.0.261",
   "pytest==7.2.2",
   "pytest-asyncio==0.21.0",
