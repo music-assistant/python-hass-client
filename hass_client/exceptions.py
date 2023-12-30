@@ -32,6 +32,8 @@ class ConnectionFailed(TransportError):
             return
         super().__init__(f"{error}", error)
 
+class ConnectionFailedDueToLargeMessage(ConnectionFailed):
+    """Exception raised when an established connection fails due to an oversize message"""
 
 class NotFoundError(BaseHassClientError):
     """Exception that is raised when an entity can't be found."""
