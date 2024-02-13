@@ -244,3 +244,12 @@ class EntityStateMessage(Message):
     """Compact Entity State(diff) object received in Event message."""
 
     event: EntityStateEvent
+
+
+class TokenDetails(TypedDict):
+    """Representation of a Token object/message from the token endpoint."""
+
+    access_token: str
+    expires_in: int
+    refresh_token: str
+    token_type: str  # Bearer

@@ -85,9 +85,8 @@ class HomeAssistantClient:
         self._version = None
         self._last_msg_id = 1
         self._loop = asyncio.get_running_loop()
-        self._http_session = aiohttp_session or ClientSession(
-            loop=self._loop, connector=TCPConnector(enable_cleanup_closed=True)
-        )
+        self._http_session_provided = aiohttp_session is not None
+        self._http_session = aiohttp_session
         self._client: ClientWebSocketResponse | None = None
         self._result_futures: dict[str, asyncio.Future] = {}
         self._shutdown_complete_event: asyncio.Event | None = None
@@ -125,14 +124,14 @@ class HomeAssistantClient:
         return await self.subscribe(handle_message, "subscribe_events", event_type=event_type)
 
     async def subscribe_entities(
-        self, cb_func: Callable[[EntityStateEvent], None], entities: list[str]
+        self, cb_func: Callable[[EntityStateEvent], None], entity_ids: list[str]
     ) -> None:
         """
         Subscribe to state_changed events for specific entities only.
 
         Parameters:
             - cb_func: callback function or coroutine
-            - entities: A list of entity_ids to watch.
+            - entity_ids: A list of entity_ids to watch.
 
         Returns: function to remove the listener.
 
@@ -145,7 +144,7 @@ class HomeAssistantClient:
             else:
                 self._loop.call_soon(cb_func, message["event"])
 
-        return await self.subscribe(handle_message, "subscribe_entities", entities=entities)
+        return await self.subscribe(handle_message, "subscribe_entities", entity_ids=entity_ids)
 
     async def call_service(
         self,
@@ -164,13 +163,14 @@ class HomeAssistantClient:
             - target: Optional dict with target parameters (e.g. { device_id: "aabbccddeeffgg" }).
         """
         if not self.connected:
-            raise NotConnected("Please call connect first.")
-        msg = {"type": "call_service", "domain": domain, "service": service}
+            msg = "Please call connect first."
+            raise NotConnected(msg)
+        params = {"domain": domain, "service": service}
         if service_data:
-            msg["service_data"] = service_data
+            params["service_data"] = service_data
         if target:
-            msg["target"] = target
-        return await self.send_command(msg)
+            params["target"] = target
+        return await self.send_command("call_service", **params)
 
     async def get_states(self) -> list[State]:
         """Get dump of the current states within Home Assistant."""
@@ -259,6 +259,10 @@ class HomeAssistantClient:
 
     async def connect(self) -> None:
         """Connect to the websocket server."""
+        if not self._http_session_provided and self._http_session is None:
+            self._http_session = ClientSession(
+                loop=self._loop, connector=TCPConnector(enable_cleanup_closed=True)
+            )
         ws_url = self._websocket_url or "ws://supervisor/core/websocket"
         ws_token = self._token or os.environ.get("HASSIO_TOKEN")
         LOGGER.debug("Connecting to Home Assistant Websocket API on %s", ws_url)
@@ -295,6 +299,10 @@ class HomeAssistantClient:
 
         self._shutdown_complete_event = asyncio.Event()
         await self._client.close()
+
+        if not self._http_session_provided and self._http_session:
+            await self._http_session.close()
+            self._http_session = None
         await self._shutdown_complete_event.wait()
 
     async def _process_messages(self) -> None:
@@ -307,15 +315,17 @@ class HomeAssistantClient:
                     break
 
                 if msg.type == WSMsgType.ERROR:
-                    raise ConnectionFailed()
+                    raise ConnectionFailed
 
                 if msg.type != WSMsgType.TEXT:
-                    raise InvalidMessage(f"Received non-Text message: {msg.type}")
+                    msg = f"Received non-Text message: {msg.type}"
+                    raise InvalidMessage(msg)
 
                 try:
                     data = msg.json(loads=json.loads)
                 except ValueError as err:
-                    raise InvalidMessage("Received invalid JSON.") from err
+                    msg = "Received invalid JSON."
+                    raise InvalidMessage(msg) from err
 
                 if LOGGER.isEnabledFor(logging.DEBUG):
                     LOGGER.debug("Received message:\n%s\n", pprint.pformat(msg))
