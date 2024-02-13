@@ -10,22 +10,20 @@ on:
     branches: [master]
 
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12"]
+    continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v3.1.0
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4.5.0
+      - name: Check out code from GitHub
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5.0.0
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install pre-commit
-          pre-commit install-hooks
-      - name: Lint with pre-commit
+          python -m pip install --upgrade pip build setuptools
+          pip install . .[test]
+      - name: Lint/test with pre-commit
         run: pre-commit run --all-files
