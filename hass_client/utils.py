@@ -5,7 +5,7 @@ import asyncio
 import urllib.error
 import urllib.parse
 import urllib.request
-from contextlib import suppress
+from os import environ
 from typing import TYPE_CHECKING
 
 from aiohttp import ClientSession
@@ -29,8 +29,10 @@ def get_websocket_url(url: str) -> str:
 
 def is_supervisor() -> bool:
     """Return if we're running inside the HA Supervisor (e.g. HAOS)."""
-    with suppress(urllib.error.URLError):
-        return urllib.request.urlopen("ws://supervisor/core/websocket").code == 401  # noqa: S310
+    try:
+        urllib.request.urlopen("http://supervisor/core/api", timeout=0.5)
+    except urllib.error.URLError as err:
+        return err.reason == "Unauthorized" and environ.get("HASSIO_TOKEN") is not None
     return False
 
 
