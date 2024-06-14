@@ -1,4 +1,5 @@
 """Constants for the Home Assistant Websocket client."""
+
 from typing import Final
 
 # Can be used to specify a catch all when registering state or event listeners.

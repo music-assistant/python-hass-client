@@ -5,6 +5,7 @@ Simple wrapper for the Websocket API
 provided by Home Assistant that allows for rapid development of apps
 connected to Home Assistant.
 """
+
 import asyncio
 import logging
 import os
