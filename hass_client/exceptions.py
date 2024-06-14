@@ -33,6 +33,10 @@ class ConnectionFailed(TransportError):
         super().__init__(f"{error}", error)
 
 
+class ConnectionFailedDueToLargeMessage(ConnectionFailed):
+    """Exception raised when an established connection fails due to an oversize message."""
+
+
 class NotFoundError(BaseHassClientError):
     """Exception that is raised when an entity can't be found."""
 
@@ -55,9 +59,3 @@ class AuthenticationFailed(BaseHassClientError):
 
 class FailedCommand(BaseHassClientError):
     """When a command has failed."""
-
-    def __init__(self, message_id: str, error_code: str):
-        """Initialize a failed command error."""
-        super().__init__(f"Command failed: {error_code}")
-        self.message_id = message_id
-        self.error_code = error_code

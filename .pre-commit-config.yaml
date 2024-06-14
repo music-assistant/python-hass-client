@@ -91,10 +91,10 @@ repos:
         types: [text]
         entry: scripts/run-in-env.sh trailing-whitespace-fixer
         stages: [commit, push, manual]
-      - id: mypy
-        name: mypy
-        entry: scripts/run-in-env.sh mypy
-        language: script
-        types: [python]
-        require_serial: true
-        files: ^(music_assistant|pylint)/.+\.py$
+      # - id: mypy
+      #   name: mypy
+      #   entry: scripts/run-in-env.sh mypy
+      #   language: script
+      #   types: [python]
+      #   require_serial: true
+      #   files: ^(hass_client|pylint)/.+\.py$

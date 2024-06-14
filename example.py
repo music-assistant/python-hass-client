@@ -38,7 +38,8 @@ async def connect(args: argparse.Namespace, session: ClientSession) -> None:
     websocket_url = args.url.replace("http", "ws") + "/api/websocket"
     async with HomeAssistantClient(websocket_url, args.token, session) as client:
         await client.subscribe_events(log_events)
-        await asyncio.sleep(360)
+        # start listening will wait forever until the connection is closed/lost
+        await client.start_listening()
 
 
 def log_events(event: Event) -> None:
