@@ -25,7 +25,7 @@ speedups = [
 ]
 test = [
   "black==24.2.0",
-  "codespell==2.2.6",
+  "codespell==2.3.0",
   "isort==5.13.2",
   "mypy==1.10.0",
   "pre-commit==3.7.1",
