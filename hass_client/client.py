@@ -254,9 +254,9 @@ class HomeAssistantClient:
         def remove_listener():
             self._subscriptions.pop(message_id)
             # try to unsubscribe
-            if "subscribe" not in message_base["type"]:
+            if "subscribe" not in message_base["command"]:
                 return
-            unsub_command = message_base["type"].replace("subscribe", "unsubscribe")
+            unsub_command = message_base["command"].replace("subscribe", "unsubscribe")
             asyncio.create_task(self.send_command_no_wait(unsub_command, subscription=message_id))
 
         return remove_listener
