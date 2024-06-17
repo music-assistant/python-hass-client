@@ -382,6 +382,7 @@ class HomeAssistantClient:
                 self._loop.create_task(handler(msg))
             else:
                 self._loop.call_soon(handler, msg)
+            return
 
         # unknown message received, log it
         LOGGER.debug("Received message with unknown type '%s': %s", msg["type"], msg)
