@@ -365,7 +365,7 @@ class HomeAssistantClient:
             future = self._result_futures.get(msg["id"])
 
             if future is None:
-                LOGGER.warning("Received result for unknown message with ID: %s", msg["id"])
+                LOGGER.debug("Received result for unknown message with ID: %s", msg["id"])
                 return
 
             if msg["success"]:
