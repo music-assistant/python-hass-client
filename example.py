@@ -37,10 +37,10 @@ async def connect(args: argparse.Namespace, session: ClientSession) -> None:
     """Connect to the server."""
     websocket_url = args.url.replace("http", "ws") + "/api/websocket"
     async with HomeAssistantClient(websocket_url, args.token, session) as client:
-        await client.subscribe_events(log_events)
         # start listening will wait forever until the connection is closed/lost
-        await client.start_listening()
-
+        listener_task = asyncio.create_task(client.start_listening())
+        await client.subscribe_events(log_events)
+        await listener_task
 
 def log_events(event: Event) -> None:
     """Log node value changes."""
