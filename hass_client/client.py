@@ -99,6 +99,7 @@ class HomeAssistantClient:
         self._result_futures: dict[str, asyncio.Future] = {}
         self._shutdown_complete_event: asyncio.Event | None = None
         self._msg_id_lock = asyncio.Lock()
+        self._listener_task: asyncio.Task | None = None
 
     @property
     def connected(self) -> bool:
@@ -410,6 +411,7 @@ class HomeAssistantClient:
     async def __aenter__(self) -> HomeAssistantClient:
         """Connect to the websocket."""
         await self.connect()
+        self._listener_task = asyncio.create_task(self.start_listening())
         return self
 
     async def __aexit__(
