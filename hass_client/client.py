@@ -13,12 +13,14 @@ import logging
 import os
 import pprint
 from collections.abc import Callable
+from ssl import SSLContext
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
 from aiohttp import (
     ClientSession,
     ClientWebSocketResponse,
+    Fingerprint,
     TCPConnector,
     WSMsgType,
     client_exceptions,
@@ -262,21 +264,22 @@ class HomeAssistantClient:
 
         return remove_listener
 
-    async def connect(self) -> None:
+    async def connect(self, ssl: SSLContext | bool | Fingerprint | None = True) -> None:
         """Connect to the websocket server."""
         if self.connected:
             # already connected
             return
         if not self._http_session_provided and self._http_session is None:
             self._http_session = ClientSession(
-                loop=self._loop, connector=TCPConnector(enable_cleanup_closed=True)
+                loop=self._loop,
+                connector=TCPConnector(enable_cleanup_closed=True),
             )
         ws_url = self._websocket_url or "ws://supervisor/core/websocket"
         ws_token = self._token or os.environ.get("HASSIO_TOKEN")
         LOGGER.debug("Connecting to Home Assistant Websocket API on %s", ws_url)
         try:
             self._client = await self._http_session.ws_connect(
-                ws_url, heartbeat=55, max_msg_size=MAX_MESSAGE_SIZE
+                ws_url, heartbeat=55, max_msg_size=MAX_MESSAGE_SIZE, ssl=ssl
             )
             version_msg: AuthRequiredMessage = await self._client.receive_json()
             self._version = version_msg["ha_version"]
