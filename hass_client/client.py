@@ -287,6 +287,7 @@ class HomeAssistantClient:
             await self._client.send_json(auth_command)
             auth_result: AuthResultMessage = await self._client.receive_json()
             if auth_result["type"] != "auth_ok":
+                await self._client.close()
                 raise AuthenticationFailed(auth_result.get("message", "Authentication failed"))
         except (
             client_exceptions.WSServerHandshakeError,
