@@ -34,7 +34,7 @@ test = [
   "pytest==8.2.2",
   "pytest-aiohttp==1.0.5",
   "pytest-cov==5.0.0",
-  "ruff==0.5.0",
+  "ruff==0.5.6",
 ]
 
 [tool.codespell]
