@@ -6,7 +6,6 @@ import asyncio
 import urllib.error
 import urllib.parse
 import urllib.request
-from os import environ
 from typing import TYPE_CHECKING
 
 from aiohttp import ClientSession
@@ -31,9 +30,12 @@ def get_websocket_url(url: str) -> str:
 def is_supervisor() -> bool:
     """Return if we're running inside the HA Supervisor (e.g. HAOS)."""
     try:
-        urllib.request.urlopen("http://supervisor/core/api", timeout=0.5)
+        urllib.request.urlopen("http://supervisor/core", timeout=1)
     except urllib.error.URLError as err:
-        return err.reason == "Unauthorized" and environ.get("HASSIO_TOKEN") is not None
+        # this should return a 401 unauthorized if it exists
+        return getattr(err, "code", 999) == 401
+    except TimeoutError:
+        return False
     return False
 
 
@@ -44,7 +46,10 @@ async def async_is_supervisor() -> bool:
 
 
 def get_auth_url(
-    hass_url: str, redirect_uri: str, client_id: str | None = None, state: str | None = None
+    hass_url: str,
+    redirect_uri: str,
+    client_id: str | None = None,
+    state: str | None = None,
 ) -> str:
     """
     Return URL to auth flow.
@@ -100,7 +105,9 @@ async def get_token(
 
     async with ClientSession() as session:
         resp = await session.post(
-            url, data=body, headers={"Content-Type": "application/x-www-form-urlencoded"}
+            url,
+            data=body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         result = await resp.json()
         if "error" in result:
