@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=62.3"]
+build-backend = "setuptools.build_meta"
+
 [project]
 authors = [
   {name = "Marcel van der Veldt", email = "marcelveldt@users.noreply.github.com"},
