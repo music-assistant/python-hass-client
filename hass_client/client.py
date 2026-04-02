@@ -14,7 +14,6 @@ import logging
 import os
 import pprint
 from collections.abc import Callable
-from ssl import SSLContext
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
@@ -54,6 +53,7 @@ from .models import (
 )
 
 if TYPE_CHECKING:
+    from ssl import SSLContext
     from types import TracebackType
 
 try:
