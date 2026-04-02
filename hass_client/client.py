@@ -9,6 +9,7 @@ connected to Home Assistant.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import os
 import pprint
@@ -127,7 +128,7 @@ class HomeAssistantClient:
         """
 
         def handle_message(message: Message):
-            if asyncio.iscoroutinefunction(cb_func):
+            if inspect.iscoroutinefunction(cb_func):
                 self._loop.create_task(cb_func(message["event"]))
             else:
                 self._loop.call_soon(cb_func, message["event"])
@@ -150,7 +151,7 @@ class HomeAssistantClient:
         """
 
         def handle_message(message: Message):
-            if asyncio.iscoroutinefunction(cb_func):
+            if inspect.iscoroutinefunction(cb_func):
                 self._loop.create_task(cb_func(message["event"]))
             else:
                 self._loop.call_soon(cb_func, message["event"])
@@ -383,7 +384,7 @@ class HomeAssistantClient:
         # subscription callback
         if msg["id"] in self._subscriptions:
             handler = self._subscriptions[msg["id"]][1]
-            if asyncio.iscoroutinefunction(handler):
+            if inspect.iscoroutinefunction(handler):
                 self._loop.create_task(handler(msg))
             else:
                 self._loop.call_soon(handler, msg)
