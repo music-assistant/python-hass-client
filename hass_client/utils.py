@@ -126,9 +126,9 @@ async def get_long_lived_token(
     lifespan: int = 365,
 ) -> str:
     """Request a Long Lived token with a short lived access token."""
-    # prevent circular import
-    # pylint: disable-next=import-outside-toplevel
-    from .client import HomeAssistantClient
+    from .client import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+        HomeAssistantClient,
+    )
 
     ws_url = get_websocket_url(hass_url)
     async with HomeAssistantClient(ws_url, access_token) as hass:
