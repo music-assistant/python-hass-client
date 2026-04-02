@@ -189,7 +189,7 @@ class HomeAssistantClient:
 
     async def get_config(self) -> list[Config]:
         """Get dump of the current config in Home Assistant."""
-        return await self.send_command("get_states")
+        return await self.send_command("get_config")
 
     async def get_services(self) -> dict[str, dict[str, Any]]:
         """Get dump of the current services in Home Assistant."""
