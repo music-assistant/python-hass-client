@@ -31,7 +31,7 @@ speedups = [
 test = [
   "black==26.3.1",
   "codespell==2.4.3",
-  "isort==5.13.2",
+  "isort==8.0.1",
   "mypy==2.3.1",
   "pre-commit==4.6.2",
   "pre-commit-hooks==4.6.0",
