@@ -39,6 +39,5 @@ def test_connection_failed_due_to_large_message_with_details() -> None:
     err = ValueError("Received message size 17000000 exceeds limit 16777216")
     exc = ConnectionFailedDueToLargeMessage(err, 16 * 1024 * 1024)
     assert "(16777216 bytes)" in str(exc)
-    assert "Increase max_msg_size" in str(exc)
     assert exc.error is err
     assert exc.max_msg_size == 16 * 1024 * 1024

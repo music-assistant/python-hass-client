@@ -39,7 +39,7 @@ class ConnectionFailedDueToLargeMessage(ConnectionFailed):
         """Initialize a connection failed due to an oversize message error."""
         size_info = f" ({max_msg_size} bytes)" if max_msg_size else ""
         message = (
-            f"Connection closed: a websocket message exceeded the maximum message size{size_info}. "
+            f"Connection closed: a websocket message exceeded the maximum message size{size_info}."
         )
         super().__init__(error, message)
         self.max_msg_size = max_msg_size

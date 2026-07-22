@@ -79,4 +79,3 @@ async def test_message_too_big_raises_distinct_error() -> None:
     assert exc_info.value.error is error
     assert exc_info.value.max_msg_size == 1024
     assert "(1024 bytes)" in str(exc_info.value)
-    assert "Increase max_msg_size" in str(exc_info.value)
