@@ -25,16 +25,25 @@ class CannotConnect(TransportError):
 class ConnectionFailed(TransportError):
     """Exception raised when an established connection fails."""
 
-    def __init__(self, error: Exception | None = None) -> None:
+    def __init__(self, error: Exception | None = None, message: str | None = None) -> None:
         """Initialize a connection failed error."""
-        if error is None:
-            super().__init__("Connection failed.")
-            return
-        super().__init__(f"{error}", error)
+        if message is None:
+            message = "Connection failed." if error is None else f"{error}"
+        super().__init__(message, error)
 
 
 class ConnectionFailedDueToLargeMessage(ConnectionFailed):
     """Exception raised when an established connection fails due to an oversize message."""
+
+    def __init__(self, error: Exception | None = None, max_msg_size: int | None = None) -> None:
+        """Initialize a connection failed due to an oversize message error."""
+        size_info = f" ({max_msg_size} bytes)" if max_msg_size else ""
+        message = (
+            f"Connection closed: a websocket message exceeded the maximum message size{size_info}. "
+            "Increase max_msg_size to resolve."
+        )
+        super().__init__(error, message)
+        self.max_msg_size = max_msg_size
 
 
 class NotFoundError(BaseHassClientError):
