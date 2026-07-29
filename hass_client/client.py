@@ -81,6 +81,7 @@ class HomeAssistantClient:
         websocket_url: str,
         token: str | None,
         aiohttp_session: ClientSession | None = None,
+        max_msg_size: int = MAX_MESSAGE_SIZE,
     ) -> None:
         """
         Initialize the connection to HomeAssistant.
@@ -89,9 +90,13 @@ class HomeAssistantClient:
         - websocket_url: full url to the HomeAssistant websocket api or None for supervisor.
         - token: a long lived token or None when using supervisor.
         - aiohttp_session: optionally provide an existing aiohttp session.
+        - max_msg_size: maximum size (in bytes) of a single incoming websocket
+          message (0 = unlimited). Increase this if the Home Assistant instance
+          has a very large number of entity states.
         """
         self._websocket_url = websocket_url
         self._token = token
+        self._max_msg_size = max_msg_size
         self._subscriptions: dict[int, tuple[dict[str, Any], SubscriptionCallback]] = {}
         self._version = None
         self._last_msg_id = 1
@@ -280,7 +285,7 @@ class HomeAssistantClient:
         LOGGER.debug("Connecting to Home Assistant Websocket API on %s", ws_url)
         try:
             self._client = await self._http_session.ws_connect(
-                ws_url, heartbeat=55, max_msg_size=MAX_MESSAGE_SIZE, ssl=ssl
+                ws_url, heartbeat=55, max_msg_size=self._max_msg_size, ssl=ssl
             )
             version_msg: AuthRequiredMessage = await self._client.receive_json()
             self._version = version_msg["ha_version"]
@@ -332,10 +337,10 @@ class HomeAssistantClient:
                 if msg.type == WSMsgType.ERROR:
                     if msg.data.code == aiohttp.WSCloseCode.MESSAGE_TOO_BIG:
                         # in the edge case we run into this, the lib consumer could
-                        # decide to increase the MAX_MESSAGE_SIZE constant but messages
-                        # bigger than 16MB are really just to big for a websocket.
-                        raise ConnectionFailedDueToLargeMessage
-                    raise ConnectionFailed
+                        # decide to increase the max_msg_size parameter but messages
+                        # bigger than 16MB are really just too big for a websocket.
+                        raise ConnectionFailedDueToLargeMessage(msg.data, self._max_msg_size)
+                    raise ConnectionFailed(msg.data)
 
                 if msg.type != WSMsgType.TEXT:
                     msg = f"Received non-Text message: {msg.type}"
