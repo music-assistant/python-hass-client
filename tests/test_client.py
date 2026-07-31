@@ -1,5 +1,6 @@
 """Tests for the HomeAssistantClient."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
@@ -79,3 +80,20 @@ async def test_message_too_big_raises_distinct_error() -> None:
     assert exc_info.value.error is error
     assert exc_info.value.max_msg_size == 1024
     assert "(1024 bytes)" in str(exc_info.value)
+
+
+async def test_remove_listener_sends_unsubscribe_events() -> None:
+    """Test the returned teardown callable always sends unsubscribe_events."""
+    client = HomeAssistantClient("ws://test/api/websocket", "token")
+    client.send_command = AsyncMock(return_value=None)
+    client.send_command_no_wait = AsyncMock(return_value=None)
+
+    remove_listener = await client.subscribe_entities(MagicMock(), ["light.test"])
+    message_id = client.send_command.call_args.kwargs["message_id"]
+
+    remove_listener()
+    await asyncio.sleep(0)  # let the fire-and-forget unsubscribe task run
+
+    client.send_command_no_wait.assert_called_once_with(
+        "unsubscribe_events", subscription=message_id
+    )

@@ -262,11 +262,11 @@ class HomeAssistantClient:
 
         def remove_listener():
             self._subscriptions.pop(message_id)
-            # try to unsubscribe
-            if "subscribe" not in message_base["command"]:
-                return
-            unsub_command = message_base["command"].replace("subscribe", "unsubscribe")
-            asyncio.create_task(self.send_command_no_wait(unsub_command, subscription=message_id))
+            # unsubscribe_events is HA's generic teardown command for any
+            # subscription, regardless of which command was used to set it up.
+            asyncio.create_task(
+                self.send_command_no_wait("unsubscribe_events", subscription=message_id)
+            )
 
         return remove_listener
 
