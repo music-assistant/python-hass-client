@@ -263,7 +263,8 @@ class HomeAssistantClient:
         self._subscriptions[message_id] = sub
         try:
             await self.send_command(**message_base, message_id=message_id)
-        except Exception:
+        except BaseException:
+            # includes the caller being cancelled while the command is in flight
             self._subscriptions.pop(message_id, None)
             raise
 

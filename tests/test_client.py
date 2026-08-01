@@ -197,3 +197,36 @@ async def test_failed_subscribe_leaves_no_subscription() -> None:
     await asyncio.gather(listener, return_exceptions=True)
 
     assert not client._subscriptions
+
+
+async def test_cancelled_subscribe_leaves_no_subscription() -> None:
+    """Test a subscribe cancelled while in flight does not leave a subscription behind."""
+    reader = _FakeReader()
+    session = _mocked_session_with_reader(reader)
+    ws_client = session.ws_connect.return_value
+    sent = asyncio.Event()
+
+    async def send_json(message: dict[str, Any]) -> None:
+        # the subscribe command is never answered, so the caller stays in flight
+        if message["type"] == "subscribe_entities":
+            sent.set()
+
+    ws_client.send_json = AsyncMock(side_effect=send_json)
+    client = HomeAssistantClient("ws://test/api/websocket", "token", session)
+    listener = asyncio.create_task(client.start_listening())
+    await asyncio.sleep(0)  # let the listener start reading
+
+    subscribe = asyncio.create_task(
+        client.subscribe(MagicMock(), "subscribe_entities", entity_ids=["light.test"])
+    )
+    async with asyncio.timeout(1):
+        await sent.wait()
+    subscribe.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await subscribe
+
+    listener.cancel()
+    await asyncio.gather(listener, return_exceptions=True)
+
+    assert not client._subscriptions
