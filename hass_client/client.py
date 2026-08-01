@@ -121,7 +121,7 @@ class HomeAssistantClient:
 
     async def subscribe_events(
         self, cb_func: Callable[[Event], None], event_type: str = MATCH_ALL
-    ) -> Callable:
+    ) -> Callable[[], None]:
         """
         Subscribe to (all) HA events.
 
@@ -142,7 +142,7 @@ class HomeAssistantClient:
 
     async def subscribe_entities(
         self, cb_func: Callable[[EntityStateEvent], None], entity_ids: list[str]
-    ) -> Callable:
+    ) -> Callable[[], None]:
         """
         Subscribe to state_changed events for specific entities only.
 
@@ -242,7 +242,7 @@ class HomeAssistantClient:
 
     async def subscribe(
         self, cb_func: Callable[[Message], None], command: str, **kwargs: dict[str, Any]
-    ) -> Callable:
+    ) -> Callable[[], None]:
         """
         Instantiate a subscription for the given command.
 
