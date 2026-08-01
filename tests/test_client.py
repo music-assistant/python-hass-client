@@ -219,8 +219,7 @@ async def test_cancelled_subscribe_leaves_no_subscription() -> None:
     subscribe = asyncio.create_task(
         client.subscribe(MagicMock(), "subscribe_entities", entity_ids=["light.test"])
     )
-    async with asyncio.timeout(1):
-        await sent.wait()
+    await asyncio.wait_for(sent.wait(), 1)
     subscribe.cancel()
 
     with pytest.raises(asyncio.CancelledError):
