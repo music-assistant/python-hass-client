@@ -142,7 +142,7 @@ class HomeAssistantClient:
 
     async def subscribe_entities(
         self, cb_func: Callable[[EntityStateEvent], None], entity_ids: list[str]
-    ) -> None:
+    ) -> Callable:
         """
         Subscribe to state_changed events for specific entities only.
 
