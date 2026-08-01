@@ -257,8 +257,15 @@ class HomeAssistantClient:
         sub = (message_base, cb_func)
 
         message_id = await self._get_message_id()
-        await self.send_command(**message_base, message_id=message_id)
+        # Home Assistant can answer a subscribe command with the result and the first
+        # event(s) in a single burst, which the listener processes before this coroutine
+        # is resumed, so the subscription must already be in place when the command is sent.
         self._subscriptions[message_id] = sub
+        try:
+            await self.send_command(**message_base, message_id=message_id)
+        except Exception:
+            self._subscriptions.pop(message_id, None)
+            raise
 
         def remove_listener():
             self._subscriptions.pop(message_id)
