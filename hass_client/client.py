@@ -121,7 +121,7 @@ class HomeAssistantClient:
 
     async def subscribe_events(
         self, cb_func: Callable[[Event], None], event_type: str = MATCH_ALL
-    ) -> Callable:
+    ) -> Callable[[], None]:
         """
         Subscribe to (all) HA events.
 
@@ -142,7 +142,7 @@ class HomeAssistantClient:
 
     async def subscribe_entities(
         self, cb_func: Callable[[EntityStateEvent], None], entity_ids: list[str]
-    ) -> None:
+    ) -> Callable[[], None]:
         """
         Subscribe to state_changed events for specific entities only.
 
@@ -242,7 +242,7 @@ class HomeAssistantClient:
 
     async def subscribe(
         self, cb_func: Callable[[Message], None], command: str, **kwargs: dict[str, Any]
-    ) -> Callable:
+    ) -> Callable[[], None]:
         """
         Instantiate a subscription for the given command.
 
@@ -257,16 +257,24 @@ class HomeAssistantClient:
         sub = (message_base, cb_func)
 
         message_id = await self._get_message_id()
-        await self.send_command(**message_base, message_id=message_id)
+        # Home Assistant can answer a subscribe command with the result and the first
+        # event(s) in a single burst, which the listener processes before this coroutine
+        # is resumed, so the subscription must already be in place when the command is sent.
         self._subscriptions[message_id] = sub
+        try:
+            await self.send_command(**message_base, message_id=message_id)
+        except BaseException:
+            # includes the caller being cancelled while the command is in flight
+            self._subscriptions.pop(message_id, None)
+            raise
 
         def remove_listener():
             self._subscriptions.pop(message_id)
-            # try to unsubscribe
-            if "subscribe" not in message_base["command"]:
-                return
-            unsub_command = message_base["command"].replace("subscribe", "unsubscribe")
-            asyncio.create_task(self.send_command_no_wait(unsub_command, subscription=message_id))
+            # unsubscribe_events is HA's generic teardown command for any
+            # subscription, regardless of which command was used to set it up.
+            asyncio.create_task(
+                self.send_command_no_wait("unsubscribe_events", subscription=message_id)
+            )
 
         return remove_listener
 
