@@ -492,3 +492,100 @@ async def test_disconnect_reports_a_listener_that_stopped_with_an_error(
         await asyncio.sleep(0)  # let the listener reach the error frame
 
     assert "exceeded the maximum message size" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("subscribe", "command"),
+    [
+        (lambda client, cb_func: client.subscribe_events(cb_func), "subscribe_events"),
+        (
+            lambda client, cb_func: client.subscribe_entities(cb_func, ["light.test"]),
+            "subscribe_entities",
+        ),
+    ],
+)
+async def test_failing_async_callback_is_logged_against_its_subscription(
+    caplog: pytest.LogCaptureFixture,
+    subscribe: Any,
+    command: str,
+) -> None:
+    """Test a raising async event callback is logged with the subscription it belongs to."""
+    unhandled: list[dict[str, Any]] = []
+    asyncio.get_running_loop().set_exception_handler(
+        lambda _loop, context: unhandled.append(context)
+    )
+    client = HomeAssistantClient("ws://test/api/websocket", "token")
+    client.send_command = AsyncMock(return_value=None)
+
+    async def cb_func(_event: Any) -> None:
+        key = "data"
+        raise KeyError(key)
+
+    await subscribe(client, cb_func)
+    message_id = client.send_command.call_args.kwargs["message_id"]
+
+    client._handle_incoming_message({"id": message_id, "type": "event", "event": {}})
+    await asyncio.sleep(0)  # let the scheduled subscription handler run
+    assert len(client._background_tasks) == 1  # the callback is kept alive while it runs
+    await asyncio.sleep(0)  # let the callback raise
+    await asyncio.sleep(0)  # and let its done-callback retrieve the exception
+
+    assert not client._background_tasks
+    assert not unhandled
+    warnings = [record for record in caplog.records if record.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert f"{command} subscription {message_id}" in warnings[0].getMessage()
+    assert warnings[0].exc_info is not None
+
+
+async def test_failing_async_subscription_handler_is_logged_against_its_subscription(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Test a raising async handler passed to subscribe() is logged with its subscription."""
+    unhandled: list[dict[str, Any]] = []
+    asyncio.get_running_loop().set_exception_handler(
+        lambda _loop, context: unhandled.append(context)
+    )
+    client = HomeAssistantClient("ws://test/api/websocket", "token")
+    client.send_command = AsyncMock(return_value=None)
+
+    async def handler(_message: dict[str, Any]) -> None:
+        error = "unexpected message"
+        raise TypeError(error)
+
+    await client.subscribe(handler, "subscribe_trigger", trigger={"platform": "state"})
+    message_id = client.send_command.call_args.kwargs["message_id"]
+
+    client._handle_incoming_message({"id": message_id, "type": "event", "event": {}})
+    assert len(client._background_tasks) == 1  # the callback is kept alive while it runs
+    await asyncio.sleep(0)  # let the callback raise
+    await asyncio.sleep(0)  # and let its done-callback retrieve the exception
+
+    assert not client._background_tasks
+    assert not unhandled
+    warnings = [record for record in caplog.records if record.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert f"subscribe_trigger subscription {message_id}" in warnings[0].getMessage()
+    assert warnings[0].exc_info is not None
+
+
+async def test_callback_failing_on_a_closed_connection_is_still_logged(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Test a callback failing because the connection is gone is still reported."""
+    client = HomeAssistantClient("ws://test/api/websocket", "token")
+    client.send_command = AsyncMock(return_value=None)
+
+    async def cb_func(_event: Any) -> None:
+        raise NotConnected
+
+    await client.subscribe_events(cb_func)
+    message_id = client.send_command.call_args.kwargs["message_id"]
+
+    client._handle_incoming_message({"id": message_id, "type": "event", "event": {}})
+    for _ in range(3):
+        await asyncio.sleep(0)  # let the handler, the callback and its done-callback run
+
+    warnings = [record for record in caplog.records if record.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert f"subscribe_events subscription {message_id}" in warnings[0].getMessage()
