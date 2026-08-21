@@ -237,7 +237,8 @@ class HomeAssistantClient:
         """
         Send a command to the HA websocket without awaiting the response.
 
-        Raises NotConnected if the client is not connected.
+        Raises NotConnected if the client is not connected, or an OSError subclass
+        if the connection breaks while writing.
         """
         message_id = await self._get_message_id()
         message = {"id": message_id, "type": command, **kwargs}
@@ -457,8 +458,8 @@ class HomeAssistantClient:
             return
         if (err := task.exception()) is None:
             return
-        if isinstance(err, (NotConnected, ConnectionResetError)):
-            # the connection is already gone, so there is nothing left to tear down
+        if isinstance(err, (NotConnected, OSError)):
+            # the connection is gone, so there is nothing left to tear down
             LOGGER.debug("Background command not sent: connection closed")
             return
         LOGGER.warning("Background command failed: %s", err, exc_info=err)
