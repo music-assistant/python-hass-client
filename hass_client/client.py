@@ -378,6 +378,9 @@ class HomeAssistantClient:
                     await self._http_session.close()
                     self._http_session = None
 
+            # let a listener task that was created but never scheduled take its first
+            # step, so it is visible as listening before we decide not to wait for it
+            await asyncio.sleep(0)
             # wait outside the lock: a listener that calls connect() must be able to
             # take the lock and fail fast rather than deadlock against us
             if (listener_task := self._listener_task) is not None:

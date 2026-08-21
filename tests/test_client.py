@@ -300,6 +300,8 @@ def _closing_ws_client(session: MagicMock, reader: _FakeReader | None = None) ->
     ws_client = session.ws_connect.return_value
 
     async def close() -> None:
+        # a real close awaits the peer, so it always yields to the event loop
+        await asyncio.sleep(0)
         ws_client.closed = True
         if reader is not None:
             reader.feed_frame(aiohttp.WSMessage(aiohttp.WSMsgType.CLOSED, None, None))
@@ -315,14 +317,20 @@ async def test_disconnect_before_listener_started_does_not_hang() -> None:
     reader = _FakeReader()  # never fed, so a live listener would read forever
     session = _mocked_session_with_reader(reader)
     _closing_ws_client(session, reader)
+    client = HomeAssistantClient("ws://test/api/websocket", "token", session)
 
     async def connect_and_immediately_disconnect() -> None:
-        async with HomeAssistantClient("ws://test/api/websocket", "token", session):
+        async with client:
             pass  # the listener task has had no chance to run yet
 
     await asyncio.wait_for(connect_and_immediately_disconnect(), 5)
+    # a listener left behind reconnects only once it is finally scheduled, so the
+    # loop has to be drained before a leak is visible
+    for _ in range(3):
+        await asyncio.sleep(0)
 
     assert session.ws_connect.call_count == 1
+    assert not client.connected
 
 
 async def test_disconnect_without_listener_does_not_hang() -> None:
@@ -414,3 +422,66 @@ async def test_disconnect_while_listener_is_connecting_does_not_hang() -> None:
 
     assert not client.connected
     assert not client._listening
+
+
+async def test_disconnect_right_after_caller_starts_listener_leaves_nothing_behind() -> None:
+    """Test disconnecting right after handing start_listening() to a task leaves no connection."""
+    reader = _FakeReader()  # never fed, so a live listener would read forever
+    session = _mocked_session_with_reader(reader)
+    _closing_ws_client(session, reader)
+    client = HomeAssistantClient("ws://test/api/websocket", "token", session)
+    await client.connect()
+    # no await in between, so the listener has not had its first step
+    listener = asyncio.create_task(client.start_listening())
+
+    await asyncio.wait_for(client.disconnect(), 5)
+
+    assert listener.done()
+    assert not client.connected
+    assert session.ws_connect.call_count == 1
+
+
+async def test_client_can_connect_again_after_disconnect() -> None:
+    """Test a disconnected client can be connected again."""
+    session = _mocked_session()
+    ws_client = _closing_ws_client(session)
+
+    async def ws_connect(*_args: Any, **_kwargs: Any) -> MagicMock:
+        # every attempt hands back a fresh, open connection that answers the handshake
+        ws_client.closed = False
+        ws_client.receive_json = AsyncMock(
+            side_effect=[
+                {"type": "auth_required", "ha_version": "2026.1.0"},
+                {"type": "auth_ok", "ha_version": "2026.1.0"},
+            ]
+        )
+        return ws_client
+
+    session.ws_connect = AsyncMock(side_effect=ws_connect)
+    client = HomeAssistantClient("ws://test/api/websocket", "token", session)
+    await client.connect()
+    await asyncio.wait_for(client.disconnect(), 5)
+
+    await client.connect()
+
+    assert client.connected
+    assert session.ws_connect.call_count == 2
+
+
+async def test_disconnect_awaits_own_listener_with_nothing_left_to_close() -> None:
+    """Test a client-owned listener is still waited for when the connection already dropped."""
+    reader = _FakeReader()  # never fed, so a live listener would read forever
+    session = _mocked_session_with_reader(reader)
+    ws_client = _closing_ws_client(session, reader)
+    client = HomeAssistantClient("ws://test/api/websocket", "token", session)
+
+    async with client:
+        # the connection drops before the listener task gets its first step, so
+        # disconnect() has nothing to await before it looks at the listener
+        ws_client.closed = True
+    # a listener left behind reconnects only once it is finally scheduled
+    for _ in range(3):
+        await asyncio.sleep(0)
+
+    assert not client.connected
+    assert session.ws_connect.call_count == 1
