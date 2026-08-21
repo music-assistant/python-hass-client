@@ -293,10 +293,11 @@ class HomeAssistantClient:
 
         Does nothing if the client is already connected.
 
-        :param ssl: SSL/TLS verification to use for the connection.
-        :raises NotConnected: if a disconnect is in progress.
-        :raises CannotConnect: if the connection could not be established.
-        :raises AuthenticationFailed: if the token was rejected.
+        Parameters:
+            - ssl: SSL/TLS verification to use for the connection.
+
+        Raises NotConnected if a disconnect is in progress, CannotConnect if the server
+        could not be reached, or AuthenticationFailed if the token was rejected.
         """
         async with self._lifecycle_lock:
             await self._connect(ssl)
