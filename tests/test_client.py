@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 from collections import deque
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -14,6 +15,7 @@ from hass_client.exceptions import (
     ConnectionFailed,
     ConnectionFailedDueToLargeMessage,
     FailedCommand,
+    NotConnected,
 )
 
 
@@ -229,3 +231,55 @@ async def test_cancelled_subscribe_leaves_no_subscription() -> None:
     await asyncio.gather(listener, return_exceptions=True)
 
     assert not client._subscriptions
+
+
+async def test_send_command_no_wait_raises_when_disconnected() -> None:
+    """Test the fire-and-forget send surfaces a closed connection to its caller."""
+    client = HomeAssistantClient("ws://test/api/websocket", "token")
+    assert not client.connected
+    with pytest.raises(NotConnected):
+        await client.send_command_no_wait("unsubscribe_events", subscription=2)
+
+
+async def test_remove_listener_on_dead_connection_does_not_leak_exception() -> None:
+    """Test tearing down a subscription after the connection died stays silent."""
+    unhandled: list[dict[str, Any]] = []
+    asyncio.get_running_loop().set_exception_handler(
+        lambda _loop, context: unhandled.append(context)
+    )
+    client = HomeAssistantClient("ws://test/api/websocket", "token")
+    client.send_command = AsyncMock(return_value=None)
+
+    remove_listener = await client.subscribe_entities(MagicMock(), ["light.test"])
+    assert not client.connected
+
+    remove_listener()
+    assert len(client._background_tasks) == 1  # the send is kept alive while in flight
+    await asyncio.sleep(0)  # let the fire-and-forget unsubscribe task run
+    await asyncio.sleep(0)  # and let its done-callback retrieve the exception
+
+    assert not client._background_tasks
+    assert not unhandled
+
+
+async def test_background_send_failing_mid_write_is_not_logged_as_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Test a connection breaking during a background send is not reported as a failure."""
+    session = _mocked_session()
+    client = HomeAssistantClient("ws://test/api/websocket", "token", session)
+    await client.connect()
+    client.send_command = AsyncMock(return_value=None)
+    remove_listener = await client.subscribe_entities(MagicMock(), ["light.test"])
+
+    # aiohttp surfaces a connection lost while writing as a plain ConnectionError
+    ws_client = session.ws_connect.return_value
+    ws_client.send_str = AsyncMock(side_effect=ConnectionError("Connection lost"))
+    ws_client.send_json = AsyncMock(side_effect=ConnectionError("Connection lost"))
+
+    remove_listener()
+    await asyncio.sleep(0)  # let the fire-and-forget unsubscribe task run
+    await asyncio.sleep(0)  # and let its done-callback retrieve the exception
+
+    assert not client._background_tasks
+    assert not [record for record in caplog.records if record.levelno > logging.DEBUG]
