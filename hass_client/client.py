@@ -108,6 +108,7 @@ class HomeAssistantClient:
         self._shutdown_complete_event: asyncio.Event | None = None
         self._msg_id_lock = asyncio.Lock()
         self._listener_task: asyncio.Task | None = None
+        self._background_tasks: set[asyncio.Task] = set()
 
     @property
     def connected(self) -> bool:
@@ -232,13 +233,15 @@ class HomeAssistantClient:
         finally:
             self._result_futures.pop(message_id)
 
-    async def send_command_no_wait(
-        self, command: str, **kwargs: dict[str, Any]
-    ) -> dict[str, Any] | list[dict[str, Any]]:
-        """Send a command to the HA websocket without awaiting the response."""
+    async def send_command_no_wait(self, command: str, **kwargs: dict[str, Any]) -> None:
+        """
+        Send a command to the HA websocket without awaiting the response.
+
+        Raises NotConnected if the client is not connected.
+        """
         message_id = await self._get_message_id()
         message = {"id": message_id, "type": command, **kwargs}
-        asyncio.create_task(self._send_json_message(message))
+        await self._send_json_message(message)
 
     async def subscribe(
         self, cb_func: Callable[[Message], None], command: str, **kwargs: dict[str, Any]
@@ -272,9 +275,11 @@ class HomeAssistantClient:
             self._subscriptions.pop(message_id)
             # unsubscribe_events is HA's generic teardown command for any
             # subscription, regardless of which command was used to set it up.
-            asyncio.create_task(
+            task = self._loop.create_task(
                 self.send_command_no_wait("unsubscribe_events", subscription=message_id)
             )
+            self._background_tasks.add(task)
+            task.add_done_callback(self._handle_background_task_done)
 
         return remove_listener
 
@@ -444,6 +449,19 @@ class HomeAssistantClient:
         """Return the representation."""
         prefix = "" if self.connected else "not "
         return f"{type(self).__name__}(ws_server_url={self._websocket_url!r}, {prefix}connected)"
+
+    def _handle_background_task_done(self, task: asyncio.Task) -> None:
+        """Discard a finished background task and consume its exception."""
+        self._background_tasks.discard(task)
+        if task.cancelled():
+            return
+        if (err := task.exception()) is None:
+            return
+        if isinstance(err, (NotConnected, ConnectionResetError)):
+            # the connection is already gone, so there is nothing left to tear down
+            LOGGER.debug("Background command not sent: connection closed")
+            return
+        LOGGER.warning("Background command failed: %s", err, exc_info=err)
 
     async def _get_message_id(self) -> int:
         """Return a new message id."""
