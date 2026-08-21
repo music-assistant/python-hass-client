@@ -109,6 +109,9 @@ class HomeAssistantClient:
         self._msg_id_lock = asyncio.Lock()
         self._listener_task: asyncio.Task | None = None
         self._background_tasks: set[asyncio.Task] = set()
+        self._listening = False
+        self._shutdown = False
+        self._lifecycle_lock = asyncio.Lock()
 
     @property
     def connected(self) -> bool:
@@ -285,7 +288,27 @@ class HomeAssistantClient:
         return remove_listener
 
     async def connect(self, ssl: SSLContext | bool | Fingerprint | None = True) -> None:
-        """Connect to the websocket server."""
+        """
+        Connect to the websocket server.
+
+        Does nothing if the client is already connected.
+
+        Parameters:
+            - ssl: SSL/TLS verification to use for the connection.
+
+        Raises NotConnected if a disconnect is in progress, CannotConnect if the server
+        could not be reached, or AuthenticationFailed if the token was rejected.
+        """
+        async with self._lifecycle_lock:
+            await self._connect(ssl)
+
+    async def _connect(self, ssl: SSLContext | bool | Fingerprint | None) -> None:
+        """Open the connection. Must be called while holding the lifecycle lock."""
+        if self._shutdown:
+            # a listener starting late must not reopen the connection
+            # that disconnect() is tearing down
+            msg = "The client is disconnecting"
+            raise NotConnected(msg)
         if self.connected:
             # already connected
             return
@@ -319,6 +342,13 @@ class HomeAssistantClient:
         ) as err:
             raise CannotConnect(err) from err
 
+        if self._shutdown:
+            # a disconnect was requested while the handshake was in flight
+            await self._client.close()
+            self._client = None
+            msg = "The client is disconnecting"
+            raise NotConnected(msg)
+
         LOGGER.info(
             "Connected to Home Assistant %s (version %s)",
             self._websocket_url.split("://")[1].split("/")[0],
@@ -326,23 +356,58 @@ class HomeAssistantClient:
         )
 
     async def disconnect(self) -> None:
-        """Disconnect the client."""
-        if not self.connected:
-            return
-        LOGGER.debug("Closing client connection")
-        self._shutdown_complete_event = asyncio.Event()
-        await self._client.close()
+        """
+        Disconnect the client and wait for the listener to finish.
 
-        if not self._http_session_provided and self._http_session:
-            await self._http_session.close()
-            self._http_session = None
-        await self._shutdown_complete_event.wait()
+        Does nothing if a disconnect is already in progress. The client can be
+        connected again afterwards.
+        """
+        if self._shutdown:
+            # a disconnect is already in progress
+            return
+        self._shutdown = True
+        try:
+            LOGGER.debug("Closing client connection")
+            self._shutdown_complete_event = asyncio.Event()
+            async with self._lifecycle_lock:
+                # a connect() that is already in flight holds the lock until it is
+                # done, so no new connection can appear once we get here
+                if self._client is not None and not self._client.closed:
+                    await self._client.close()
+
+                if not self._http_session_provided and self._http_session:
+                    await self._http_session.close()
+                    self._http_session = None
+
+            # let a listener task that was created but never scheduled take its first
+            # step, so it is visible as listening before we decide not to wait for it
+            await asyncio.sleep(0)
+            # wait outside the lock: a listener that calls connect() must be able to
+            # take the lock and fail fast rather than deadlock against us
+            if (listener_task := self._listener_task) is not None:
+                # we own the listener task, so await it directly. A listener that
+                # was never scheduled never sets the shutdown event.
+                self._listener_task = None
+                await asyncio.wait({listener_task})
+                if not listener_task.cancelled() and (err := listener_task.exception()):
+                    LOGGER.warning("Listener stopped with an error: %s", err)
+            elif self._listening:
+                # the caller owns the listener task, so the shutdown event is the
+                # only handle we have on it
+                await self._shutdown_complete_event.wait()
+        finally:
+            self._shutdown = False
 
     async def start_listening(self) -> None:
         """Connect (if needed) and start listening to incoming messages from the server."""
-        await self.connect()
+        self._listening = True
         try:
-            while not self._client.closed:
+            try:
+                await self.connect()
+            except NotConnected:
+                # a disconnect was requested before we started listening
+                return
+            while self.connected:
                 msg = await self._client.receive()
 
                 if msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSED, WSMsgType.CLOSING):
@@ -377,9 +442,12 @@ class HomeAssistantClient:
             for future in self._result_futures.values():
                 future.cancel()
 
-            if not self._client.closed:
+            if self._client is not None and not self._client.closed:
                 await self._client.close()
 
+            # no await between these two: disconnect() treats "not listening" as
+            # "the shutdown event will never be set"
+            self._listening = False
             if self._shutdown_complete_event:
                 self._shutdown_complete_event.set()
 
@@ -413,10 +481,7 @@ class HomeAssistantClient:
         LOGGER.debug("Received message with unknown type '%s': %s", msg["type"], msg)
 
     async def _send_json_message(self, message: dict[str, Any]) -> None:
-        """Send a message.
-
-        Raises NotConnected if client not connected.
-        """
+        """Send a message, raising NotConnected if the client is not connected."""
         if not self.connected:
             raise NotConnected
 
