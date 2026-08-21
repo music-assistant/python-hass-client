@@ -474,3 +474,21 @@ async def test_disconnect_awaits_own_listener_with_nothing_left_to_close() -> No
 
     assert not client.connected
     assert session.ws_connect.call_count == 1
+
+
+async def test_disconnect_reports_a_listener_that_stopped_with_an_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Test a listener that died of a connection error is not discarded silently."""
+    session = _mocked_session()
+    ws_client = _closing_ws_client(session)
+    error = aiohttp.WebSocketError(aiohttp.WSCloseCode.MESSAGE_TOO_BIG, "too big")
+    ws_client.receive = AsyncMock(
+        return_value=aiohttp.WSMessage(aiohttp.WSMsgType.ERROR, error, None)
+    )
+    client = HomeAssistantClient("ws://test/api/websocket", "token", session)
+
+    async with client:
+        await asyncio.sleep(0)  # let the listener reach the error frame
+
+    assert "exceeded the maximum message size" in caplog.text

@@ -388,7 +388,9 @@ class HomeAssistantClient:
                 # we own the listener task, so await it directly. A listener that
                 # was never scheduled never sets the shutdown event.
                 self._listener_task = None
-                await asyncio.gather(listener_task, return_exceptions=True)
+                await asyncio.wait({listener_task})
+                if not listener_task.cancelled() and (err := listener_task.exception()):
+                    LOGGER.warning("Listener stopped with an error: %s", err)
             elif self._listening:
                 # the caller owns the listener task, so the shutdown event is the
                 # only handle we have on it
