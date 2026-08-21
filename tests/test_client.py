@@ -27,11 +27,15 @@ class _FakeReader:
         self._buffer: deque[aiohttp.WSMessage] = deque()
         self._waiter: asyncio.Future[None] | None = None
 
-    def feed(self, message: dict[str, Any]) -> None:
-        """Buffer a text frame and wake up a pending read."""
-        self._buffer.append(aiohttp.WSMessage(aiohttp.WSMsgType.TEXT, json.dumps(message), None))
+    def feed_frame(self, message: aiohttp.WSMessage) -> None:
+        """Buffer a raw frame and wake up a pending read."""
+        self._buffer.append(message)
         if self._waiter is not None and not self._waiter.done():
             self._waiter.set_result(None)
+
+    def feed(self, message: dict[str, Any]) -> None:
+        """Buffer a text frame and wake up a pending read."""
+        self.feed_frame(aiohttp.WSMessage(aiohttp.WSMsgType.TEXT, json.dumps(message), None))
 
     async def read(self) -> aiohttp.WSMessage:
         """Return the next frame, awaiting only when the buffer ran empty."""
@@ -283,3 +287,130 @@ async def test_background_send_failing_mid_write_is_not_logged_as_error(
 
     assert not client._background_tasks
     assert not [record for record in caplog.records if record.levelno > logging.DEBUG]
+
+
+def _closing_ws_client(session: MagicMock, reader: _FakeReader | None = None) -> MagicMock:
+    """
+    Make the mocked websocket client report itself closed once close() was awaited.
+
+    :param session: mocked client session holding the websocket client to patch.
+    :param reader: reader to hand a CLOSED frame to when the client is closed.
+    :return: the patched websocket client.
+    """
+    ws_client = session.ws_connect.return_value
+
+    async def close() -> None:
+        ws_client.closed = True
+        if reader is not None:
+            reader.feed_frame(aiohttp.WSMessage(aiohttp.WSMsgType.CLOSED, None, None))
+
+    ws_client.close = AsyncMock(side_effect=close)
+    return ws_client
+
+
+async def test_disconnect_before_listener_started_does_not_hang() -> None:
+    """Test disconnecting before the listener task ever ran does not hang."""
+    # the listener used to get its first chance to run inside disconnect(), reconnect
+    # to the closed connection and then keep running, so disconnect() waited forever
+    reader = _FakeReader()  # never fed, so a live listener would read forever
+    session = _mocked_session_with_reader(reader)
+    _closing_ws_client(session, reader)
+
+    async def connect_and_immediately_disconnect() -> None:
+        async with HomeAssistantClient("ws://test/api/websocket", "token", session):
+            pass  # the listener task has had no chance to run yet
+
+    await asyncio.wait_for(connect_and_immediately_disconnect(), 5)
+
+    assert session.ws_connect.call_count == 1
+
+
+async def test_disconnect_without_listener_does_not_hang() -> None:
+    """Test disconnecting a client that never started listening does not hang."""
+    session = _mocked_session()
+    _closing_ws_client(session)
+    client = HomeAssistantClient("ws://test/api/websocket", "token", session)
+    await client.connect()
+
+    await asyncio.wait_for(client.disconnect(), 5)
+
+    assert not client.connected
+
+
+async def test_disconnect_waits_for_caller_owned_listener() -> None:
+    """Test disconnect still waits for a listener running in a task the caller owns."""
+    reader = _FakeReader()
+    session = _mocked_session_with_reader(reader)
+    _closing_ws_client(session, reader)
+    client = HomeAssistantClient("ws://test/api/websocket", "token", session)
+    listener = asyncio.create_task(client.start_listening())
+    await asyncio.sleep(0)  # let the listener start reading
+    assert client._listening
+
+    await asyncio.wait_for(client.disconnect(), 5)
+
+    assert listener.done()
+    assert not client._listening
+    assert session.ws_connect.call_count == 1
+
+
+def _gated_ws_connect(session: MagicMock) -> asyncio.Event:
+    """
+    Hold ws_connect() open until the returned gate is set.
+
+    :param session: mocked client session whose ws_connect to patch.
+    :return: the gate that releases the pending connection attempt.
+    """
+    gate = asyncio.Event()
+    ws_client = session.ws_connect.return_value
+
+    async def ws_connect(*_args: Any, **_kwargs: Any) -> MagicMock:
+        await gate.wait()
+        return ws_client
+
+    session.ws_connect = AsyncMock(side_effect=ws_connect)
+    session.ws_connect.return_value = ws_client
+    return gate
+
+
+async def test_connect_in_flight_does_not_outlive_disconnect() -> None:
+    """Test a connection opened while disconnecting is not left behind."""
+    reader = _FakeReader()
+    session = _mocked_session_with_reader(reader)
+    ws_client = _closing_ws_client(session, reader)
+    gate = _gated_ws_connect(session)
+    client = HomeAssistantClient("ws://test/api/websocket", "token", session)
+
+    connecting = asyncio.create_task(client.connect())
+    await asyncio.sleep(0)  # let connect() reach ws_connect
+    disconnecting = asyncio.create_task(client.disconnect())
+    await asyncio.sleep(0)
+    gate.set()
+
+    await asyncio.wait_for(disconnecting, 5)
+    with pytest.raises(NotConnected):
+        await asyncio.wait_for(connecting, 5)
+
+    assert not client.connected
+    assert ws_client.close.await_count == 1
+
+
+async def test_disconnect_while_listener_is_connecting_does_not_hang() -> None:
+    """Test disconnecting while a caller-owned listener is still connecting does not hang."""
+    reader = _FakeReader()
+    session = _mocked_session_with_reader(reader)
+    _closing_ws_client(session, reader)
+    gate = _gated_ws_connect(session)
+    client = HomeAssistantClient("ws://test/api/websocket", "token", session)
+
+    listener = asyncio.create_task(client.start_listening())
+    await asyncio.sleep(0)  # let the listener reach ws_connect
+    disconnecting = asyncio.create_task(client.disconnect())
+    await asyncio.sleep(0)
+    gate.set()
+
+    await asyncio.wait_for(disconnecting, 5)
+    await asyncio.wait_for(listener, 5)  # the listener ends without raising
+
+    assert not client.connected
+    assert not client._listening
