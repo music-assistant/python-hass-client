@@ -13,7 +13,8 @@ import inspect
 import logging
 import os
 import pprint
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
@@ -138,7 +139,10 @@ class HomeAssistantClient:
 
         def handle_message(message: Message):
             if inspect.iscoroutinefunction(cb_func):
-                self._loop.create_task(cb_func(message["event"]))
+                self._create_background_task(
+                    cb_func(message["event"]),
+                    f"Callback for subscribe_events subscription {message['id']}",
+                )
             else:
                 self._loop.call_soon(cb_func, message["event"])
 
@@ -161,7 +165,10 @@ class HomeAssistantClient:
 
         def handle_message(message: Message):
             if inspect.iscoroutinefunction(cb_func):
-                self._loop.create_task(cb_func(message["event"]))
+                self._create_background_task(
+                    cb_func(message["event"]),
+                    f"Callback for subscribe_entities subscription {message['id']}",
+                )
             else:
                 self._loop.call_soon(cb_func, message["event"])
 
@@ -279,11 +286,9 @@ class HomeAssistantClient:
             self._subscriptions.pop(message_id)
             # unsubscribe_events is HA's generic teardown command for any
             # subscription, regardless of which command was used to set it up.
-            task = self._loop.create_task(
-                self.send_command_no_wait("unsubscribe_events", subscription=message_id)
+            self._create_background_task(
+                self._unsubscribe(message_id), f"Unsubscribe of subscription {message_id}"
             )
-            self._background_tasks.add(task)
-            task.add_done_callback(self._handle_background_task_done)
 
         return remove_listener
 
@@ -470,9 +475,12 @@ class HomeAssistantClient:
 
         # subscription callback
         if msg["id"] in self._subscriptions:
-            handler = self._subscriptions[msg["id"]][1]
+            message_base, handler = self._subscriptions[msg["id"]]
             if inspect.iscoroutinefunction(handler):
-                self._loop.create_task(handler(msg))
+                self._create_background_task(
+                    handler(msg),
+                    f"Callback for {message_base['command']} subscription {msg['id']}",
+                )
             else:
                 self._loop.call_soon(handler, msg)
             return
@@ -516,18 +524,29 @@ class HomeAssistantClient:
         prefix = "" if self.connected else "not "
         return f"{type(self).__name__}(ws_server_url={self._websocket_url!r}, {prefix}connected)"
 
-    def _handle_background_task_done(self, task: asyncio.Task) -> None:
-        """Discard a finished background task and consume its exception."""
+    async def _unsubscribe(self, subscription_id: int) -> None:
+        """Send the teardown command for a subscription."""
+        try:
+            await self.send_command_no_wait("unsubscribe_events", subscription=subscription_id)
+        except (NotConnected, OSError):
+            # the connection is gone, so there is nothing left to tear down
+            LOGGER.debug(
+                "Unsubscribe of subscription %s skipped: connection closed", subscription_id
+            )
+
+    def _create_background_task(self, coro: Coroutine[Any, Any, Any], description: str) -> None:
+        """Run a coroutine detached from the caller, keeping the task alive until it finishes."""
+        task = self._loop.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(partial(self._handle_background_task_done, description=description))
+
+    def _handle_background_task_done(self, task: asyncio.Task, description: str) -> None:
+        """Discard a finished background task and log an unexpected failure."""
         self._background_tasks.discard(task)
         if task.cancelled():
             return
-        if (err := task.exception()) is None:
-            return
-        if isinstance(err, (NotConnected, OSError)):
-            # the connection is gone, so there is nothing left to tear down
-            LOGGER.debug("Background command not sent: connection closed")
-            return
-        LOGGER.warning("Background command failed: %s", err, exc_info=err)
+        if (err := task.exception()) is not None:
+            LOGGER.warning("%s failed: %s", description, err, exc_info=err)
 
     async def _get_message_id(self) -> int:
         """Return a new message id."""
