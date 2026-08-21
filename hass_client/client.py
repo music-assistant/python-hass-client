@@ -478,10 +478,7 @@ class HomeAssistantClient:
         LOGGER.debug("Received message with unknown type '%s': %s", msg["type"], msg)
 
     async def _send_json_message(self, message: dict[str, Any]) -> None:
-        """Send a message.
-
-        Raises NotConnected if client not connected.
-        """
+        """Send a message, raising NotConnected if the client is not connected."""
         if not self.connected:
             raise NotConnected
 

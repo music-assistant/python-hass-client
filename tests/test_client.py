@@ -290,13 +290,7 @@ async def test_background_send_failing_mid_write_is_not_logged_as_error(
 
 
 def _closing_ws_client(session: MagicMock, reader: _FakeReader | None = None) -> MagicMock:
-    """
-    Make the mocked websocket client report itself closed once close() was awaited.
-
-    :param session: mocked client session holding the websocket client to patch.
-    :param reader: reader to hand a CLOSED frame to when the client is closed.
-    :return: the patched websocket client.
-    """
+    """Make the mocked websocket client report itself closed once close() was awaited."""
     ws_client = session.ws_connect.return_value
 
     async def close() -> None:
@@ -363,12 +357,7 @@ async def test_disconnect_waits_for_caller_owned_listener() -> None:
 
 
 def _gated_ws_connect(session: MagicMock) -> asyncio.Event:
-    """
-    Hold ws_connect() open until the returned gate is set.
-
-    :param session: mocked client session whose ws_connect to patch.
-    :return: the gate that releases the pending connection attempt.
-    """
+    """Hold ws_connect() open until the returned gate is set."""
     gate = asyncio.Event()
     ws_client = session.ws_connect.return_value
 
