@@ -419,7 +419,10 @@ class HomeAssistantClient:
                     break
 
                 if msg.type == WSMsgType.ERROR:
-                    if msg.data.code == aiohttp.WSCloseCode.MESSAGE_TOO_BIG:
+                    if (
+                        isinstance(msg.data, aiohttp.WebSocketError)
+                        and msg.data.code == aiohttp.WSCloseCode.MESSAGE_TOO_BIG
+                    ):
                         # in the edge case we run into this, the lib consumer could
                         # decide to increase the max_msg_size parameter but messages
                         # bigger than 16MB are really just too big for a websocket.

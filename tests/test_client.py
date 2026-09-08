@@ -91,11 +91,18 @@ async def test_custom_max_msg_size_passed_to_ws_connect() -> None:
     )
 
 
-async def test_error_frame_raises_connection_failed_with_error() -> None:
+@pytest.mark.parametrize(
+    "error",
+    [
+        aiohttp.WebSocketError(aiohttp.WSCloseCode.PROTOCOL_ERROR, "protocol error"),
+        aiohttp.ServerTimeoutError("No PONG received after 27.5 seconds"),
+        ConnectionResetError("Connection reset by peer"),
+    ],
+)
+async def test_error_frame_raises_connection_failed_with_error(error: Exception) -> None:
     """Test an ERROR frame surfaces the underlying aiohttp error."""
     session = _mocked_session()
     ws_client = session.ws_connect.return_value
-    error = aiohttp.WebSocketError(aiohttp.WSCloseCode.PROTOCOL_ERROR, "protocol error")
     ws_client.receive = AsyncMock(
         return_value=aiohttp.WSMessage(aiohttp.WSMsgType.ERROR, error, None)
     )
@@ -104,7 +111,8 @@ async def test_error_frame_raises_connection_failed_with_error() -> None:
     with pytest.raises(ConnectionFailed) as exc_info:
         await client.start_listening()
     assert exc_info.value.error is error
-    assert "protocol error" in str(exc_info.value)
+    assert str(error) in str(exc_info.value)
+    ws_client.close.assert_awaited_once()
 
 
 async def test_message_too_big_raises_distinct_error() -> None:
