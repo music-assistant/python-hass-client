@@ -50,6 +50,7 @@ def get_auth_url(
     redirect_uri: str,
     client_id: str | None = None,
     state: str | None = None,
+    code_challenge: str | None = None,
 ) -> str:
     """
     Return URL to auth flow.
@@ -58,6 +59,10 @@ def get_auth_url(
     The redirect url has to be of the same host and port as the client ID.
 
     If client_id is omitted, it will be derived from the redirect url.
+
+    Pass code_challenge (the unpadded base64url SHA-256 of a code verifier) to use PKCE
+    (S256), and the matching code_verifier to get_token. Home Assistant checks PKCE from
+    2026.10 and older versions ignore it.
 
     https://developers.home-assistant.io/docs/auth_api#token
     """
@@ -74,11 +79,17 @@ def get_auth_url(
     url += f"auth/authorize?client_id={enc_client_id}&redirect_uri={enc_redirect_uri}"
     if state:
         url += f"&state={state}"
+    if code_challenge:
+        url += f"&code_challenge={urllib.parse.quote(code_challenge)}&code_challenge_method=S256"
     return url
 
 
 async def get_token(
-    hass_url: str, code: str, client_id: str, grant_type: str = "authorization_code"
+    hass_url: str,
+    code: str,
+    client_id: str,
+    grant_type: str = "authorization_code",
+    code_verifier: str | None = None,
 ) -> TokenDetails:
     """
     Return tokens given valid grants.
@@ -86,6 +97,8 @@ async def get_token(
     The token endpoint returns tokens given valid grants.
     This grant is either an authorization code retrieved from the
     authorize endpoint or a refresh token.
+
+    Pass code_verifier when the authorization code was requested with a code_challenge.
 
     https://developers.home-assistant.io/docs/auth_api#token
     """
@@ -100,6 +113,8 @@ async def get_token(
     body = f"grant_type={grant_type}&client_id={enc_client_id}"
     if grant_type == "authorization_code":
         body += f"&code={code}"
+        if code_verifier:
+            body += f"&code_verifier={urllib.parse.quote(code_verifier)}"
     elif grant_type == "refresh_token":
         body += f"&refresh_token={code}"
 
