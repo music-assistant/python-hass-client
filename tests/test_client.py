@@ -107,6 +107,29 @@ async def test_error_frame_raises_connection_failed_with_error() -> None:
     assert "protocol error" in str(exc_info.value)
 
 
+@pytest.mark.parametrize(
+    "error",
+    [
+        aiohttp.ServerTimeoutError("No PONG received after 27.5 seconds"),
+        ConnectionResetError("Connection reset by peer"),
+    ],
+)
+async def test_error_frame_without_close_code_raises_connection_failed(
+    error: Exception,
+) -> None:
+    """Test an ERROR frame carrying an error without a close code raises ConnectionFailed."""
+    session = _mocked_session()
+    ws_client = session.ws_connect.return_value
+    ws_client.receive = AsyncMock(
+        return_value=aiohttp.WSMessage(aiohttp.WSMsgType.ERROR, error, None)
+    )
+    ws_client.close = AsyncMock()
+    client = HomeAssistantClient("ws://test/api/websocket", "token", session)
+    with pytest.raises(ConnectionFailed) as exc_info:
+        await client.start_listening()
+    assert exc_info.value.error is error
+
+
 async def test_message_too_big_raises_distinct_error() -> None:
     """Test a MESSAGE_TOO_BIG ERROR frame raises ConnectionFailedDueToLargeMessage."""
     session = _mocked_session()
