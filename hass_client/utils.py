@@ -60,7 +60,7 @@ def get_auth_url(
 
     If client_id is omitted, it will be derived from the redirect url.
 
-    Pass code_challenge (the base64url encoded SHA-256 of a code verifier) to use PKCE
+    Pass code_challenge (the unpadded base64url SHA-256 of a code verifier) to use PKCE
     (S256), and the matching code_verifier to get_token. Home Assistant checks PKCE from
     2026.10 and older versions ignore it.
 
