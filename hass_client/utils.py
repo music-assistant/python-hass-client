@@ -78,7 +78,7 @@ def get_auth_url(
     enc_redirect_uri = urllib.parse.quote(redirect_uri)
     url += f"auth/authorize?client_id={enc_client_id}&redirect_uri={enc_redirect_uri}"
     if state:
-        url += f"&state={state}"
+        url += f"&state={urllib.parse.quote(state, safe='')}"
     if code_challenge:
         url += f"&code_challenge={urllib.parse.quote(code_challenge)}&code_challenge_method=S256"
     return url
@@ -112,11 +112,11 @@ async def get_token(
     url += "auth/token"
     body = f"grant_type={grant_type}&client_id={enc_client_id}"
     if grant_type == "authorization_code":
-        body += f"&code={code}"
+        body += f"&code={urllib.parse.quote(code, safe='')}"
         if code_verifier:
             body += f"&code_verifier={urllib.parse.quote(code_verifier)}"
     elif grant_type == "refresh_token":
-        body += f"&refresh_token={code}"
+        body += f"&refresh_token={urllib.parse.quote(code, safe='')}"
 
     async with ClientSession() as session:
         resp = await session.post(
