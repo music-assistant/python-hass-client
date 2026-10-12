@@ -38,7 +38,7 @@ test = [
   "pytest==9.1.1",
   "pytest-aiohttp==1.1.1",
   "pytest-cov==7.1.0",
-  "ruff==0.15.8",
+  "ruff==0.16.10",
 ]
 
 [tool.codespell]
@@ -165,6 +165,7 @@ ignore = [
   "ANN003", # Just annoying, not really useful
   "ANN101", # Self... explanatory
   "ANN401", # Opinioated warning on disallowing dynamically typed expressions
+  "CPY001", # No copyright headers in this project
   "D203", # Conflicts with other rules
   "D213", # Conflicts with other rules
   "D417", # False positives in some occasions
