@@ -25,6 +25,8 @@ jobs:
           python -m pip install --upgrade pip build setuptools
           pip install . .[test]
       - name: Lint with pre-commit
+        env:
+          SKIP: no-commit-to-branch
         run: pre-commit run --all-files
 
   test:
