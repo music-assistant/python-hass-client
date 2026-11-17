@@ -12,6 +12,7 @@ import pytest
 
 from hass_client.client import MAX_MESSAGE_SIZE, HomeAssistantClient
 from hass_client.exceptions import (
+    CannotConnect,
     ConnectionFailed,
     ConnectionFailedDueToLargeMessage,
     FailedCommand,
@@ -89,6 +90,21 @@ async def test_custom_max_msg_size_passed_to_ws_connect() -> None:
     session.ws_connect.assert_called_once_with(
         "ws://test/api/websocket", heartbeat=55, max_msg_size=0, ssl=True
     )
+
+
+async def test_connection_closed_during_auth_raises_cannot_connect() -> None:
+    """Test a connection closed by the server during auth raises CannotConnect."""
+    session = _mocked_session()
+    session.ws_connect.return_value.receive_json = AsyncMock(
+        side_effect=[
+            {"type": "auth_required", "ha_version": "2026.1.0"},
+            aiohttp.WSMessageTypeError("Received message 257:None is not WSMsgType.TEXT"),
+        ]
+    )
+    client = HomeAssistantClient("ws://test/api/websocket", "token", session)
+
+    with pytest.raises(CannotConnect):
+        await client.connect()
 
 
 async def test_error_frame_raises_connection_failed_with_error() -> None:

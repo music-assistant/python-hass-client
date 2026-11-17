@@ -344,6 +344,9 @@ class HomeAssistantClient:
         except (
             client_exceptions.WSServerHandshakeError,
             client_exceptions.ClientError,
+            # a connection closed during auth makes receive_json raise
+            # WSMessageTypeError (a TypeError on older aiohttp versions)
+            TypeError,
         ) as err:
             raise CannotConnect(err) from err
 
